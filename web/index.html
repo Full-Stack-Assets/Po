@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COO Engine — Constraint-Optimized Orchestration</title>
+    <meta
+      name="description"
+      content="A constraint-optimized orchestration engine for multi-agent LLM systems: multi-dimensional fitness scoring, intelligent fallback routing, predictive spawn, and cost-aware retirement."
+    />
+    <style>
+      :root {
+        --bg: #0a0a0f;
+        --panel: #14141c;
+        --border: #26263340;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #c084fc;
+        --accent2: #34d399;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          sans-serif;
+        line-height: 1.6;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      header {
+        text-align: center;
+        padding: 80px 0 40px;
+        background: radial-gradient(
+          ellipse at top,
+          rgba(192, 132, 252, 0.12),
+          transparent 60%
+        );
+      }
+      .badge {
+        display: inline-block;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 14px;
+        margin-bottom: 24px;
+      }
+      h1 {
+        font-size: clamp(32px, 6vw, 52px);
+        margin: 0 0 16px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, #fff, #c084fc 60%, #60a5fa);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .tagline {
+        font-size: clamp(16px, 2.5vw, 20px);
+        color: var(--muted);
+        max-width: 680px;
+        margin: 0 auto 36px;
+      }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #c084fc, #8b5cf6);
+        color: #0a0a0f;
+        font-weight: 700;
+        padding: 14px 28px;
+        border-radius: 12px;
+        font-size: 16px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 8px 30px rgba(192, 132, 252, 0.25);
+      }
+      .cta:hover {
+        transform: translateY(-2px);
+        text-decoration: none;
+        box-shadow: 0 12px 40px rgba(192, 132, 252, 0.4);
+      }
+      .cta.secondary {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        box-shadow: none;
+        margin-left: 12px;
+      }
+      .note {
+        margin-top: 18px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      section {
+        padding: 48px 0;
+      }
+      h2 {
+        font-size: 22px;
+        margin: 0 0 24px;
+        font-weight: 700;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 22px;
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .card .icon {
+        font-size: 22px;
+        margin-bottom: 12px;
+        display: block;
+      }
+      .docs li {
+        margin-bottom: 8px;
+        color: var(--muted);
+      }
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 32px 0 56px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      code {
+        background: #1f1f2b;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <span class="badge">Constraint-Optimized Orchestration</span>
+        <h1>The COO Engine</h1>
+        <p class="tagline">
+          A constraint-aware orchestrator for multi-agent LLM systems —
+          routing every task to the right agent under hard budget, latency,
+          and capacity limits.
+        </p>
+        <a class="cta" href="./dashboard.html">▶ Launch live dashboard</a>
+        <a
+          class="cta secondary"
+          href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-"
+          >View on GitHub</a
+        >
+        <p class="note">
+          The dashboard runs entirely in your browser in simulation mode — no
+          API key or backend required.
+        </p>
+      </div>
+    </header>
+
+    <section class="wrap">
+      <h2>Core capabilities</h2>
+      <div class="grid">
+        <div class="card">
+          <span class="icon">◈</span>
+          <h3>Multi-dimensional fitness scoring</h3>
+          <p>
+            Every (agent, task) pair is scored across five weighted
+            constraints: type match, cost, latency, load, and budget headroom.
+          </p>
+        </div>
+        <div class="card">
+          <span class="icon">⊕</span>
+          <h3>Intelligent fallback routing</h3>
+          <p>
+            Evaluates cross-type routing and uses it when it is genuinely the
+            best option — not limited to same-type matching.
+          </p>
+        </div>
+        <div class="card">
+          <span class="icon">⟨⟩</span>
+          <h3>Predictive spawn</h3>
+          <p>
+            Forecasts cost before scaling up, only spawning agents when demand
+            and the budget both justify it.
+          </p>
+        </div>
+        <div class="card">
+          <span class="icon">≡</span>
+          <h3>Cost-aware retirement</h3>
+          <p>
+            Retires idle agents under budget pressure or after an idle timeout,
+            keeping spend inside hard limits.
+          </p>
+        </div>
+        <div class="card">
+          <span class="icon">◉</span>
+          <h3>Full audit trail</h3>
+          <p>
+            Every routing, spawn, and retirement decision is logged with a
+            timestamp, score, and human-readable justification.
+          </p>
+        </div>
+        <div class="card">
+          <span class="icon">⌗</span>
+          <h3>Mini CLI &amp; analytics</h3>
+          <p>
+            Inspect agent stats, queue depth, budget, health, and decisions
+            from the command line with <code>mini</code>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap">
+      <h2>Documentation</h2>
+      <ul class="docs">
+        <li>
+          <a
+            href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-/blob/main/01-ALGORITHM-SPECIFICATION.md"
+            >Algorithm Specification</a
+          >
+          — the five constraint dimensions and decision rules
+        </li>
+        <li>
+          <a
+            href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-/blob/main/02-BENCHMARK-REPORT.md"
+            >Benchmark Report</a
+          >
+          — measured performance characteristics
+        </li>
+        <li>
+          <a
+            href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-/blob/main/03-TRADEOFFS-ANALYSIS.md"
+            >Trade-offs Analysis</a
+          >
+          — design decisions and their implications
+        </li>
+        <li>
+          <a
+            href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-/blob/main/COO-IMPLEMENTATION-GUIDE.md"
+            >Implementation Guide</a
+          >
+          — how the engine maps to the specification
+        </li>
+        <li>
+          <a
+            href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-/blob/main/README.md"
+            >README</a
+          >
+          — CLI usage and the mini-extra analytics library
+        </li>
+      </ul>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        COO Engine Implementation · MIT License ·
+        <a href="https://github.com/Full-Stack-Assets/COO-Engine-Implementation-"
+          >Source on GitHub</a
+        >
+      </div>
+    </footer>
+  </body>
+</html>

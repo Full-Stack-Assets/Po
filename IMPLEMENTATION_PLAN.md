@@ -1,6 +1,9 @@
 # Implementation Plan: "Po" — The AI Operator That Proves Its Work
 
-> Derived from the Research Report ("Beating Polsia"). Repo is greenfield — this is a from-scratch build.
+> Derived from the Research Report ("Beating Polsia"). The repo now contains two
+> imported foundations — `backend/` (the orchestration core) and `web/` (the
+> landing page + dashboard); see [`README.md`](./README.md). The build below adds
+> Po's three differentiators (validation, verification, HITL approval) on top.
 
 ## 1. Product Thesis
 
