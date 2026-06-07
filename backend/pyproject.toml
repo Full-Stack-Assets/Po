@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "orchestrator-agent"
+version = "2.0.0"
+description = "Constraint-Optimized LLM Agent Orchestration System"
+readme = "README.md"
+license = {text = "Proprietary"}
+requires-python = ">=3.11"
+authors = [{name = "Nicholas Albertson"}]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.0.0",
+    "openai>=1.60.0",
+    "anthropic>=0.40.0",
+    "mistralai>=1.3.0",
+    "aiohttp>=3.10.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["orchestrator_agent*"]

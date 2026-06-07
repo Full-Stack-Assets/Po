@@ -1,0 +1,37 @@
+"""
+Constraint-Optimized LLM Agent Orchestration System
+====================================================
+Multi-provider agent orchestration framework with intelligent routing,
+constraint management, fallback chains, and streaming support.
+
+Providers: OpenAI, Anthropic, Azure OpenAI, Google Gemini, Mistral, Ollama
+"""
+
+__version__ = "2.0.0"
+__author__ = "Nicholas Albertson"
+
+from orchestrator_agent.models import (
+    Task, TaskContext, TaskStatus, AgentResult, AgentProfile,
+    AgentCapability, Constraint, ExecutionMode,
+)
+from orchestrator_agent.llm_providers import (
+    ProviderType, ProviderConfig, Message, LLMResponse, LLMChunk,
+    TokenUsage, ModelInfo, BaseLLMProvider, create_provider,
+)
+from orchestrator_agent.llm_manager import LLMManager, FallbackChain, ModelSelector
+from orchestrator_agent.agents import (
+    SubAgent, ResearchAgent, WriterAgent, CodeAgent,
+    AnalysisAgent, SummarizerAgent, PlannerAgent,
+)
+from orchestrator_agent.orchestrator import OrchestratorAgent
+
+__all__ = [
+    "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
+    "SubAgent", "ResearchAgent", "WriterAgent", "CodeAgent",
+    "AnalysisAgent", "SummarizerAgent", "PlannerAgent",
+    "Task", "TaskContext", "TaskStatus", "AgentResult", "AgentProfile",
+    "AgentCapability", "Constraint", "ExecutionMode",
+    "ProviderType", "ProviderConfig", "Message", "LLMResponse",
+    "LLMChunk", "TokenUsage", "ModelInfo", "BaseLLMProvider",
+    "create_provider",
+]
