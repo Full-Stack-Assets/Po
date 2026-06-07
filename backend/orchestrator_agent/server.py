@@ -116,6 +116,18 @@ async def decide_approval(approval_id: str, req: ApprovalDecisionRequest):
     )
 
 
+@app.get("/v2/runs")
+async def runs(limit: int = 50):
+    """Recent orchestration runs (persisted audit trail)."""
+    return {"runs": await orchestrator.list_runs(limit)}
+
+
+@app.get("/v2/stats")
+async def stats():
+    """Aggregate reliability metrics for the public dashboard."""
+    return await orchestrator.get_reliability_stats()
+
+
 @app.get("/v2/status")
 async def status():
     return orchestrator.get_status()

@@ -171,11 +171,34 @@ checks = await layer.verify_actions([
 ])
 ```
 
+### Persistence (`persistence.py`)
+
+Approvals, runs, and validations are written through a `TrustStore`. With no
+database configured the default `InMemoryTrustStore` is used; set `DATABASE_URL`
+(and have `asyncpg` installed) to use `PostgresTrustStore`, which creates its
+schema on startup, **survives restarts** (pending approvals are rehydrated into
+the queue and can still be resumed), and powers the reliability metrics.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v2/runs?limit=N` | Recent orchestration runs (audit trail) |
+| GET | `/v2/stats` | Aggregate reliability metrics (success / verified-pass / refund rates) |
+
+```python
+orch = OrchestratorAgent(config={
+    "persistence": {"dsn": "postgresql://user:pass@localhost:5432/po"},
+})
+await orch.initialize()        # creates schema, hydrates pending approvals
+...
+await orch.get_reliability_stats()
+```
+
 ### Live web console
 
 `web/live.html` is a zero-build operator console that connects to this API
-(`/v2/status`, `/v2/health`, `/v2/approvals`) and drives the approval queue from
-the browser. CORS is enabled on the server for local development.
+(`/v2/status`, `/v2/health`, `/v2/approvals`, `/v2/stats`), shows the persisted
+reliability metrics, and drives the approval queue from the browser. CORS is
+enabled on the server for local development.
 
 ## Python SDK Usage
 

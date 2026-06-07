@@ -41,6 +41,9 @@ from orchestrator_agent.approvals import (
     ApprovalManager, ApprovalPolicy, ApprovalRequest,
     ApprovalDecision, ApprovalType,
 )
+from orchestrator_agent.persistence import (
+    TrustStore, InMemoryTrustStore, PostgresTrustStore, create_trust_store,
+)
 
 __all__ = [
     "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
@@ -61,4 +64,6 @@ __all__ = [
     "default_live_scorers",
     "ApprovalManager", "ApprovalPolicy", "ApprovalRequest",
     "ApprovalDecision", "ApprovalType",
+    "TrustStore", "InMemoryTrustStore", "PostgresTrustStore",
+    "create_trust_store",
 ]

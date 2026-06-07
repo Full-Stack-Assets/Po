@@ -103,6 +103,12 @@ cd web && python3 -m http.server 5173
   email deliverability (SPF/DMARC/DKIM), Stripe webhook (HMAC signature).
 - ✅ **Live web console** (`web/live.html`) wired to `/v2/status`, `/v2/health`,
   and `/v2/approvals`, driving the approval queue. CORS enabled on the API.
-- **60/60 unit tests passing.**
-- ⬜ Persist trust-layer state (approvals, runs, validations) to Postgres.
+- ✅ **Trust-layer persistence** (`persistence.py`): `TrustStore` interface with
+  an in-memory default and a Postgres backend (`DATABASE_URL`). Persists
+  approvals / runs / validations, **rehydrates pending approvals on restart**
+  (resumable), and powers `/v2/runs` + `/v2/stats`. SQL validated against a real
+  PostgreSQL.
+- ✅ Live console shows persisted reliability metrics (`/v2/stats`).
+- **68/68 unit tests passing** (67 + 1 Postgres test that runs when
+  `DATABASE_URL` is set).
 - ⬜ Replace the in-browser simulation bundle with the live console as default.

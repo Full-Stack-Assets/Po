@@ -78,6 +78,22 @@ class ApprovalRequest:
             "decided_at": self.decided_at.isoformat() if self.decided_at else None,
         }
 
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "ApprovalRequest":
+        def _ts(v):
+            return datetime.fromisoformat(v) if v else None
+        return cls(
+            approval_id=d["approval_id"],
+            type=ApprovalType(d.get("type", "generic")),
+            summary=d.get("summary", ""),
+            payload=d.get("payload") or {},
+            status=ApprovalDecision(d.get("status", "pending")),
+            edited_payload=d.get("edited_payload"),
+            created_at=_ts(d.get("created_at")) or datetime.utcnow(),
+            expires_at=_ts(d.get("expires_at")),
+            decided_at=_ts(d.get("decided_at")),
+        )
+
 
 class ApprovalPolicy:
     """Decides whether a task's action needs human approval."""
@@ -126,6 +142,11 @@ class ApprovalManager:
         self._store[req.approval_id] = req
         logger.info(f"Approval queued: {req.approval_id} ({type.value})")
         return req
+
+    def load(self, requests: List[ApprovalRequest]) -> None:
+        """Hydrate the queue from persisted requests (e.g. on restart)."""
+        for req in requests:
+            self._store[req.approval_id] = req
 
     def get(self, approval_id: str) -> Optional[ApprovalRequest]:
         req = self._store.get(approval_id)

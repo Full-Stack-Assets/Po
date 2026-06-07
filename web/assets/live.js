@@ -77,6 +77,30 @@
       "<th>Active</th></tr>" + rows + "</table>";
   }
 
+  function pct(x) { return (Math.round((x || 0) * 1000) / 10) + "%"; }
+
+  function renderStats(s) {
+    var box = $("stats");
+    if (!s || s.persistence === "disabled") {
+      box.innerHTML = '<p class="muted">Persistence disabled — set ' +
+        "DATABASE_URL on the backend to track reliability over time.</p>";
+      return;
+    }
+    var cells = [
+      { lbl: "Runs", num: s.total_runs, cls: "" },
+      { lbl: "Success rate", num: pct(s.success_rate), cls: "green" },
+      { lbl: "Verified pass", num: pct(s.verified_pass_rate), cls: "green" },
+      { lbl: "Refund rate", num: pct(s.refund_rate),
+        cls: s.refund_rate > 0 ? "red" : "" },
+      { lbl: "Validations", num: s.validations_recorded, cls: "" },
+      { lbl: "Approvals pending", num: s.approvals_pending, cls: "" },
+    ];
+    box.innerHTML = '<div class="stats">' + cells.map(function (c) {
+      return '<div class="stat"><div class="num ' + c.cls + '">' +
+        esc(c.num) + '</div><div class="lbl">' + esc(c.lbl) + "</div></div>";
+    }).join("") + "</div>";
+  }
+
   function renderUsage(u) {
     if (!u) { $("usage").innerHTML = '<p class="muted">—</p>'; return; }
     $("usage").innerHTML = "<table>" +
@@ -145,6 +169,7 @@
       renderProviders(status.providers);
       renderAgents(status.agents);
       renderUsage(status.usage);
+      try { renderStats(await api("/v2/stats")); } catch (e) {}
       var ap = await api("/v2/approvals");
       renderApprovals(ap.approvals || []);
       showError("");

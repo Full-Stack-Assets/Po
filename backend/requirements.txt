@@ -11,6 +11,8 @@ aiohttp>=3.10.0
 
 # Trust layer — DNS lookups for the email-deliverability verifier
 dnspython>=2.6.0
+# Trust layer — durable persistence (optional; in-memory store used if absent)
+asyncpg>=0.29.0
 
 # Dev / Testing
 pytest>=8.0.0

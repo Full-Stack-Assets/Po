@@ -24,7 +24,10 @@ from orchestrator_agent.validation import ValidationGate, ValidationResult
 from orchestrator_agent.verification import VerificationLayer
 from orchestrator_agent.approvals import (
     ApprovalManager, ApprovalPolicy, ApprovalDecision, ApprovalType,
+    ApprovalRequest,
 )
+from orchestrator_agent.persistence import TrustStore, create_trust_store
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -347,9 +350,18 @@ class ExecutionPipeline:
                                error=f"Unknown approval '{approval_id}'")
         task = self._tasks.get(req.payload.get("task_id", ""))
         if task is None:
-            return AgentResult(agent_id="approval_gate", task_id="",
-                               output="", success=False,
-                               error="Original task no longer available")
+            # Task is not in memory (e.g. after a restart): reconstruct it
+            # from the persisted approval payload so resume still works.
+            pl = req.payload or {}
+            if pl.get("input"):
+                task = Task(task_id=pl.get("task_id") or req.approval_id,
+                            input_text=pl["input"],
+                            intent=pl.get("intent", ""))
+                self._tasks[task.task_id] = task
+            else:
+                return AgentResult(agent_id="approval_gate", task_id="",
+                                   output="", success=False,
+                                   error="Original task no longer available")
         decision = (ApprovalDecision.APPROVED if approved
                     else ApprovalDecision.REJECTED)
         edited_payload = ({"input": edited_input}
@@ -483,6 +495,8 @@ class OrchestratorAgent:
         self.constraint_engine = ConstraintEngine()
         self.registry = AgentRegistry()
         self._contexts: Dict[str, TaskContext] = {}
+        self.store: Optional[TrustStore] = None
+        self.approval_manager: Optional[ApprovalManager] = None
         self._initialized = False
 
     async def initialize(
@@ -535,6 +549,17 @@ class OrchestratorAgent:
             if trust.get("approvals", True) else None
         )
 
+        # ── Durable persistence (optional; in-memory by default) ────────
+        persistence_cfg = self.config.get("persistence", {})
+        if persistence_cfg.get("enabled", True):
+            self.store = create_trust_store(persistence_cfg)
+            try:
+                await self.store.init()
+                await self._hydrate_approvals()
+            except Exception as e:  # noqa: BLE001 — degrade to no persistence
+                logger.warning(f"Persistence init failed, disabling: {e}")
+                self.store = None
+
         self.router = TaskRouter(self.registry, self.constraint_engine)
         self.pipeline = ExecutionPipeline(
             self.router, self.constraint_engine,
@@ -547,6 +572,60 @@ class OrchestratorAgent:
 
     async def shutdown(self) -> None:
         await self.llm.shutdown()
+        if self.store:
+            await self.store.close()
+
+    async def _hydrate_approvals(self) -> None:
+        """Restore pending approvals from the store into the live queue."""
+        if not (self.store and self.approval_manager):
+            return
+        pending = await self.store.list_pending_approvals()
+        if pending:
+            self.approval_manager.load(
+                [ApprovalRequest.from_dict(d) for d in pending])
+            logger.info(f"Hydrated {len(pending)} pending approval(s)")
+
+    def _run_record(self, context: TaskContext, task: Task,
+                    result: AgentResult) -> Dict[str, Any]:
+        v = task.metadata.get("validation")
+        return {
+            "task_id": task.task_id,
+            "conversation_id": context.conversation_id,
+            "intent": task.intent,
+            "status": task.status.value,
+            "input": task.input_text,
+            "output": result.output,
+            "success": result.success,
+            "error": result.error,
+            "tokens_used": result.tokens_used,
+            "cost_usd": round(result.cost, 6),
+            "provider": result.provider_used,
+            "model": result.model_used,
+            "validation_score": (v.score.value
+                                 if isinstance(v, ValidationResult) else None),
+            "verification": result.metadata.get("verification"),
+            "refunded": result.metadata.get("refunded", False),
+        }
+
+    async def _persist(self, context: TaskContext, task: Task,
+                       result: AgentResult) -> None:
+        if not self.store:
+            return
+        try:
+            await self.store.record_run(self._run_record(context, task, result))
+            v = task.metadata.get("validation")
+            if isinstance(v, ValidationResult):
+                rec = v.to_dict()
+                rec["id"] = str(uuid.uuid4())[:12]
+                rec["task_id"] = task.task_id
+                await self.store.record_validation(rec)
+            aid = task.metadata.get("approval_id")
+            if aid and self.approval_manager:
+                req = self.approval_manager.get(aid)
+                if req:
+                    await self.store.upsert_approval(req.to_dict())
+        except Exception as e:  # noqa: BLE001 — persistence must never break a run
+            logger.warning(f"Persistence write failed: {e}")
 
     def _get_context(self, conversation_id: str = "") -> TaskContext:
         if not conversation_id:
@@ -582,6 +661,7 @@ class OrchestratorAgent:
             task.metadata["validation_override"] = True
         result = await self.pipeline.execute_task(task, context)
 
+        await self._persist(context, task, result)
         return self._result_payload(context, task, result)
 
     def _result_payload(self, context: TaskContext, task: Task,
@@ -630,7 +710,16 @@ class OrchestratorAgent:
         task = self.pipeline._tasks.get(result.task_id)
         if task is None:
             return {"success": result.success, "error": result.error}
+        await self._persist(context, task, result)
         return self._result_payload(context, task, result)
+
+    async def list_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
+        return await self.store.list_runs(limit) if self.store else []
+
+    async def get_reliability_stats(self) -> Dict[str, Any]:
+        if not self.store:
+            return {"persistence": "disabled"}
+        return await self.store.stats()
 
     async def orchestrate_batch(
         self, inputs: List[str], conversation_id: str = "",

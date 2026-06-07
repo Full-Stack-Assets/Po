@@ -118,6 +118,24 @@ async def test_approval_rejection_cancels_task():
 
 
 @pytest.mark.asyncio
+async def test_resume_reconstructs_task_after_restart():
+    # Process 1: task pauses for approval.
+    mgr = ApprovalManager(auto_approve=False)
+    p1, _ = make_pipeline(StubAgent(), approval_manager=mgr)
+    task = Task(input_text="send outreach", intent="write")
+    paused = await p1.execute_task(task, TaskContext())
+    approval_id = paused.metadata["approval_id"]
+
+    # Process 2 ("restart"): brand-new pipeline with empty task cache, same
+    # (hydrated) approval manager. Resume must rebuild the task from payload.
+    p2, _ = make_pipeline(StubAgent(output="sent"), approval_manager=mgr)
+    assert p2._tasks == {}
+    resumed = await p2.resume_task(approval_id, TaskContext(), approved=True)
+    assert resumed.success is True
+    assert resumed.output == "sent"
+
+
+@pytest.mark.asyncio
 async def test_auto_approve_does_not_pause():
     mgr = ApprovalManager(auto_approve=True)
     pipeline, _ = make_pipeline(StubAgent(), approval_manager=mgr)
