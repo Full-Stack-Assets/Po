@@ -119,6 +119,39 @@ curl -X POST http://localhost:8000/v2/batch \
   }'
 ```
 
+## Po Trust Layer
+
+On top of the orchestration core, three optional gates implement Po's
+"prove the work" differentiators (see the repo-root `README.md`). All are
+enabled by default and configured via `config["trust_layer"]`.
+
+| Gate | Module | What it does |
+|------|--------|--------------|
+| **Validation gate** | `validation.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. LLM-backed with a deterministic heuristic fallback. |
+| **Approval gate** | `approvals.py` | Pauses risky intents (`write`→outreach, `code`→deploy) for one-tap human approve / edit / reject. Auto-approves safe, reversible work. Pending requests carry a TTL and auto-expire. |
+| **Verification layer** | `verification.py` | After execution, independently checks claims in the output (HTTP 200 on URLs). With `fail_on_unverified`, a failed check flips the result and **auto-refunds** the action's budget. |
+
+### Trust-layer endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v2/orchestrate` (`"validate": true`) | Run the validation gate before executing |
+| GET  | `/v2/approvals` | List pending approval requests |
+| POST | `/v2/approvals/{id}` | Approve / reject / edit and resume the task |
+
+```python
+# Validate before spending; override only if you really mean to.
+result = await orch.orchestrate("Build a CRM for dog walkers", validate=True)
+if result["validation"]["score"] == "red":
+    ...  # blocked — pass validation_override=True to force
+
+# Human-in-the-loop: risky tasks pause with auto_approve disabled.
+orch = OrchestratorAgent(config={"trust_layer": {"auto_approve": False}})
+await orch.initialize()
+res = await orch.orchestrate("Send cold outreach to 50 leads")  # -> awaiting_approval
+await orch.decide_approval(res["approval"]["id"], approved=True)
+```
+
 ## Python SDK Usage
 
 ```python

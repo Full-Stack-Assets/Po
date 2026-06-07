@@ -38,12 +38,20 @@ class OrchestrationRequest(BaseModel):
     conversation_id: Optional[str] = ""
     mode: Optional[str] = "sequential"
     stream: Optional[bool] = False
+    validate: Optional[bool] = False
+    validation_override: Optional[bool] = False
 
 
 class BatchRequest(BaseModel):
     inputs: List[str]
     conversation_id: Optional[str] = ""
     mode: Optional[str] = "concurrent"
+
+
+class ApprovalDecisionRequest(BaseModel):
+    approved: bool = True
+    edited_input: Optional[str] = None
+    conversation_id: Optional[str] = ""
 
 
 @app.post("/v2/orchestrate")
@@ -59,7 +67,9 @@ async def orchestrate(req: OrchestrationRequest):
 
     mode = ExecutionMode(req.mode) if req.mode else ExecutionMode.SEQUENTIAL
     return await orchestrator.orchestrate(
-        req.input, req.conversation_id or "", mode
+        req.input, req.conversation_id or "", mode,
+        validate=bool(req.validate),
+        validation_override=bool(req.validation_override),
     )
 
 
@@ -68,6 +78,27 @@ async def batch(req: BatchRequest):
     mode = ExecutionMode(req.mode) if req.mode else ExecutionMode.CONCURRENT
     return await orchestrator.orchestrate_batch(
         req.inputs, req.conversation_id or "", mode
+    )
+
+
+@app.get("/v2/approvals")
+async def list_approvals():
+    """List pending human-in-the-loop approval requests."""
+    if orchestrator.approval_manager is None:
+        return {"approvals": []}
+    return {
+        "approvals": [r.to_dict()
+                      for r in orchestrator.approval_manager.list_pending()]
+    }
+
+
+@app.post("/v2/approvals/{approval_id}")
+async def decide_approval(approval_id: str, req: ApprovalDecisionRequest):
+    """Approve / reject / edit a pending action and resume the task."""
+    return await orchestrator.decide_approval(
+        approval_id, approved=req.approved,
+        edited_input=req.edited_input,
+        conversation_id=req.conversation_id or "",
     )
 
 

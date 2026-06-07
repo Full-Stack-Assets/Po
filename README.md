@@ -91,7 +91,14 @@ cd web && python3 -m http.server 5173
 
 ## Status
 
-- ✅ Orchestration backend imported, parses clean, 13/13 unit tests passing.
+- ✅ Orchestration backend imported, parses clean.
 - ✅ COO Engine site (landing + simulated dashboard) imported.
-- ⬜ Validation gate, verification layer, and HITL approval gates (Phase 1 of the plan).
-- ⬜ Wire the web dashboard to live backend `/v2/status` + `/v2/health`.
+- ✅ **Validation gate, verification layer, and HITL approval gates** built and
+  wired into `ExecutionPipeline` + the API. **40/40 unit tests passing.**
+  See [`backend/README.md`](./backend/README.md#po-trust-layer).
+- ⬜ Real validation signals (keyword/competitor/WTP scraping) behind the gate's
+  scorer interface (currently LLM-backed + heuristic).
+- ⬜ Real side-effecting verifiers (email deliverability, deploy health, Stripe
+  webhook) alongside the HTTP checker.
+- ⬜ Wire the web dashboard to live backend `/v2/status`, `/v2/health`, and
+  `/v2/approvals`.

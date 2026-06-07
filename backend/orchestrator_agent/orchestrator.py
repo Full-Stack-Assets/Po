@@ -20,6 +20,11 @@ from orchestrator_agent.agents import (
     SubAgent, ResearchAgent, WriterAgent, CodeAgent,
     AnalysisAgent, SummarizerAgent, PlannerAgent,
 )
+from orchestrator_agent.validation import ValidationGate, ValidationResult
+from orchestrator_agent.verification import VerificationLayer
+from orchestrator_agent.approvals import (
+    ApprovalManager, ApprovalPolicy, ApprovalDecision, ApprovalType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,15 +203,33 @@ class TaskRouter:
 
 class ExecutionPipeline:
     def __init__(self, router: TaskRouter,
-                 constraint_engine: ConstraintEngine):
+                 constraint_engine: ConstraintEngine,
+                 validation_gate: Optional["ValidationGate"] = None,
+                 verification_layer: Optional["VerificationLayer"] = None,
+                 approval_manager: Optional["ApprovalManager"] = None):
         self.router = router
         self.constraint_engine = constraint_engine
+        # Po trust layer (all optional — pipeline works without them)
+        self.validation_gate = validation_gate
+        self.verification_layer = verification_layer
+        self.approval_manager = approval_manager
         self._tasks: Dict[str, Task] = {}
 
     async def execute_task(self, task: Task,
                            context: TaskContext) -> AgentResult:
         self._tasks[task.task_id] = task
         task.status = TaskStatus.RUNNING
+
+        # ── 1. Validation gate (pre-execution) ─────────────────────────
+        gated = await self._run_validation(task)
+        if gated is not None:
+            return gated
+
+        # ── 2. Approval gate (human-in-the-loop) ───────────────────────
+        gated = self._run_approval_gate(task)
+        if gated is not None:
+            return gated
+
         agent = self.router.route(task)
         if agent is None:
             task.status = TaskStatus.FAILED
@@ -223,6 +246,8 @@ class ExecutionPipeline:
             result = await agent.execute(task, context)
             self.constraint_engine.consume("token_budget", result.tokens_used)
             self.constraint_engine.consume("cost_budget", result.cost)
+            # ── 3. Verification layer (post-execution) ─────────────────
+            await self._run_verification(result)
             task.status = (
                 TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
             )
@@ -238,6 +263,99 @@ class ExecutionPipeline:
         finally:
             if profile:
                 profile.active_tasks = max(0, profile.active_tasks - 1)
+
+    # ── Trust-layer hooks ──────────────────────────────────────────────
+
+    async def _run_validation(self, task: Task) -> Optional[AgentResult]:
+        """Returns a blocking AgentResult if validation fails, else None."""
+        if not (self.validation_gate
+                and task.metadata.get("require_validation")):
+            return None
+        vr = await self.validation_gate.validate(task.input_text)
+        task.metadata["validation"] = vr
+        if vr.is_blocking and not task.metadata.get("validation_override"):
+            task.status = TaskStatus.FAILED
+            return AgentResult(
+                agent_id="validation_gate", task_id=task.task_id, output="",
+                success=False,
+                error=(f"Validation failed (score={vr.overall_score}/100, "
+                       f"{vr.score.value}). {vr.rationale}"),
+                metadata={"validation": vr.to_dict()},
+            )
+        return None
+
+    def _run_approval_gate(self, task: Task) -> Optional[AgentResult]:
+        """Returns an awaiting-approval AgentResult if gated, else None."""
+        if not self.approval_manager or task.metadata.get("approved"):
+            return None
+        atype = self.approval_manager.policy.requires_approval(task)
+        if atype is None or self.approval_manager.auto_approve:
+            return None
+        req = self.approval_manager.create(
+            type=atype,
+            summary=task.input_text[:160],
+            payload={"task_id": task.task_id, "intent": task.intent,
+                     "input": task.input_text},
+        )
+        task.metadata["approval_id"] = req.approval_id
+        task.status = TaskStatus.AWAITING_APPROVAL
+        return AgentResult(
+            agent_id="approval_gate", task_id=task.task_id, output="",
+            success=False, error="awaiting_approval",
+            metadata={"approval_id": req.approval_id,
+                      "approval_type": atype.value},
+        )
+
+    async def _run_verification(self, result: AgentResult) -> None:
+        if not (self.verification_layer and result.success):
+            return
+        vresults = await self.verification_layer.verify_output(result.output)
+        if not vresults:
+            return
+        summary = self.verification_layer.summarize(vresults)
+        result.metadata["verification"] = summary
+        result.metadata["verification_details"] = [v.to_dict()
+                                                    for v in vresults]
+        if (not summary["all_passed"]
+                and self.verification_layer.fail_on_unverified):
+            # Auto-refund the budget consumed by an action that didn't verify.
+            self.constraint_engine.consume("token_budget",
+                                           -result.tokens_used)
+            self.constraint_engine.consume("cost_budget", -result.cost)
+            result.metadata["refunded"] = True
+            result.success = False
+            result.error = "verification_failed"
+
+    async def resume_task(self, approval_id: str, context: TaskContext,
+                          *, approved: bool = True,
+                          edited_input: Optional[str] = None) -> AgentResult:
+        """Resume a task that was paused awaiting approval."""
+        if self.approval_manager is None:
+            raise RuntimeError("No approval manager configured")
+        req = self.approval_manager.get(approval_id)
+        if req is None:
+            return AgentResult(agent_id="approval_gate", task_id="",
+                               output="", success=False,
+                               error=f"Unknown approval '{approval_id}'")
+        task = self._tasks.get(req.payload.get("task_id", ""))
+        if task is None:
+            return AgentResult(agent_id="approval_gate", task_id="",
+                               output="", success=False,
+                               error="Original task no longer available")
+        decision = (ApprovalDecision.APPROVED if approved
+                    else ApprovalDecision.REJECTED)
+        edited_payload = ({"input": edited_input}
+                          if edited_input is not None else None)
+        self.approval_manager.decide(approval_id, decision, edited_payload)
+        if not approved:
+            task.status = TaskStatus.CANCELLED
+            return AgentResult(agent_id="approval_gate",
+                               task_id=task.task_id, output="",
+                               success=False, error="approval_rejected")
+        if edited_input is not None:
+            task.input_text = edited_input
+        task.metadata["approved"] = True
+        return await self.execute_task(task, context)
 
     async def execute_batch(self, tasks: List[Task], context: TaskContext,
                             mode: ExecutionMode = ExecutionMode.SEQUENTIAL
@@ -395,10 +513,29 @@ class OrchestratorAgent:
                           AnalysisAgent, SummarizerAgent, PlannerAgent]:
             self.registry.register(agent_cls(self.llm))
 
+        # ── Po trust layer ─────────────────────────────────────────────
+        trust = self.config.get("trust_layer", {})
+        self.validation_gate = (
+            ValidationGate(self.llm) if trust.get("validation", True) else None
+        )
+        self.verification_layer = VerificationLayer(
+            enabled=trust.get("verification", True),
+            fail_on_unverified=trust.get("fail_on_unverified", False),
+        )
+        self.approval_manager = (
+            ApprovalManager(auto_approve=trust.get("auto_approve", True))
+            if trust.get("approvals", True) else None
+        )
+
         self.router = TaskRouter(self.registry, self.constraint_engine)
-        self.pipeline = ExecutionPipeline(self.router, self.constraint_engine)
+        self.pipeline = ExecutionPipeline(
+            self.router, self.constraint_engine,
+            validation_gate=self.validation_gate,
+            verification_layer=self.verification_layer,
+            approval_manager=self.approval_manager,
+        )
         self._initialized = True
-        logger.info("OrchestratorAgent v2 ready")
+        logger.info("OrchestratorAgent v2 ready (trust layer enabled)")
 
     async def shutdown(self) -> None:
         await self.llm.shutdown()
@@ -418,6 +555,8 @@ class OrchestratorAgent:
         self, user_input: str, conversation_id: str = "",
         mode: ExecutionMode = ExecutionMode.SEQUENTIAL,
         metadata: Optional[Dict] = None,
+        validate: bool = False,
+        validation_override: bool = False,
     ) -> Dict[str, Any]:
         if not self._initialized:
             raise RuntimeError("Call initialize() first")
@@ -429,8 +568,17 @@ class OrchestratorAgent:
         classifier = IntentClassifier(self.llm)
         intent = await classifier.classify(user_input)
         task = Task(input_text=user_input, intent=intent)
+        if validate:
+            task.metadata["require_validation"] = True
+        if validation_override:
+            task.metadata["validation_override"] = True
         result = await self.pipeline.execute_task(task, context)
 
+        return self._result_payload(context, task, result)
+
+    def _result_payload(self, context: TaskContext, task: Task,
+                        result: AgentResult) -> Dict[str, Any]:
+        validation = task.metadata.get("validation")
         return {
             "conversation_id": context.conversation_id,
             "task_id": task.task_id,
@@ -445,9 +593,36 @@ class OrchestratorAgent:
             "latency_ms": round(result.latency_ms, 1),
             "model_used": result.model_used,
             "provider_used": result.provider_used,
+            # ── Po trust layer ──────────────────────────────────────────
+            "validation": (validation.to_dict()
+                           if isinstance(validation, ValidationResult)
+                           else None),
+            "verification": result.metadata.get("verification"),
+            "refunded": result.metadata.get("refunded", False),
+            "approval": (
+                {"id": result.metadata.get("approval_id"),
+                 "type": result.metadata.get("approval_type")}
+                if task.status == TaskStatus.AWAITING_APPROVAL else None
+            ),
             "constraints": self.constraint_engine.get_status(),
             "provider_health": self.llm.get_health(),
         }
+
+    async def decide_approval(
+        self, approval_id: str, approved: bool = True,
+        edited_input: Optional[str] = None, conversation_id: str = "",
+    ) -> Dict[str, Any]:
+        """Approve / reject / edit a pending approval and resume the task."""
+        if not self._initialized:
+            raise RuntimeError("Call initialize() first")
+        context = self._get_context(conversation_id)
+        result = await self.pipeline.resume_task(
+            approval_id, context, approved=approved, edited_input=edited_input,
+        )
+        task = self.pipeline._tasks.get(result.task_id)
+        if task is None:
+            return {"success": result.success, "error": result.error}
+        return self._result_payload(context, task, result)
 
     async def orchestrate_batch(
         self, inputs: List[str], conversation_id: str = "",

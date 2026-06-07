@@ -24,6 +24,14 @@ from orchestrator_agent.agents import (
     AnalysisAgent, SummarizerAgent, PlannerAgent,
 )
 from orchestrator_agent.orchestrator import OrchestratorAgent
+from orchestrator_agent.validation import (
+    ValidationGate, ValidationResult, ValidationScore,
+)
+from orchestrator_agent.verification import VerificationLayer, VerificationResult
+from orchestrator_agent.approvals import (
+    ApprovalManager, ApprovalPolicy, ApprovalRequest,
+    ApprovalDecision, ApprovalType,
+)
 
 __all__ = [
     "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
@@ -34,4 +42,9 @@ __all__ = [
     "ProviderType", "ProviderConfig", "Message", "LLMResponse",
     "LLMChunk", "TokenUsage", "ModelInfo", "BaseLLMProvider",
     "create_provider",
+    # Po trust layer
+    "ValidationGate", "ValidationResult", "ValidationScore",
+    "VerificationLayer", "VerificationResult",
+    "ApprovalManager", "ApprovalPolicy", "ApprovalRequest",
+    "ApprovalDecision", "ApprovalType",
 ]
