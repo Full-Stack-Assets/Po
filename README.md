@@ -94,11 +94,15 @@ cd web && python3 -m http.server 5173
 - ✅ Orchestration backend imported, parses clean.
 - ✅ COO Engine site (landing + simulated dashboard) imported.
 - ✅ **Validation gate, verification layer, and HITL approval gates** built and
-  wired into `ExecutionPipeline` + the API. **40/40 unit tests passing.**
+  wired into `ExecutionPipeline` + the API.
   See [`backend/README.md`](./backend/README.md#po-trust-layer).
-- ⬜ Real validation signals (keyword/competitor/WTP scraping) behind the gate's
-  scorer interface (currently LLM-backed + heuristic).
-- ⬜ Real side-effecting verifiers (email deliverability, deploy health, Stripe
-  webhook) alongside the HTTP checker.
-- ⬜ Wire the web dashboard to live backend `/v2/status`, `/v2/health`, and
-  `/v2/approvals`.
+- ✅ **Real validation signals** behind a `SignalScorer` interface
+  (`signals.py`): Google Suggest demand/competitor + Reddit WTP, with
+  per-dimension heuristic fallback. `ValidationGate.with_live_signals()`.
+- ✅ **Real side-effecting verifiers** (`verifiers.py`): deploy health (HTTP),
+  email deliverability (SPF/DMARC/DKIM), Stripe webhook (HMAC signature).
+- ✅ **Live web console** (`web/live.html`) wired to `/v2/status`, `/v2/health`,
+  and `/v2/approvals`, driving the approval queue. CORS enabled on the API.
+- **60/60 unit tests passing.**
+- ⬜ Persist trust-layer state (approvals, runs, validations) to Postgres.
+- ⬜ Replace the in-browser simulation bundle with the live console as default.

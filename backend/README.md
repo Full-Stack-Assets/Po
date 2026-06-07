@@ -127,9 +127,9 @@ enabled by default and configured via `config["trust_layer"]`.
 
 | Gate | Module | What it does |
 |------|--------|--------------|
-| **Validation gate** | `validation.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. LLM-backed with a deterministic heuristic fallback. |
+| **Validation gate** | `validation.py` + `signals.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. Pluggable scorers behind a `SignalScorer` interface: LLM-backed, a deterministic heuristic, or **live signals** (Google Suggest demand/competitor, Reddit WTP) via `ValidationGate.with_live_signals(...)` — each degrades to heuristic per-dimension when offline. |
 | **Approval gate** | `approvals.py` | Pauses risky intents (`write`→outreach, `code`→deploy) for one-tap human approve / edit / reject. Auto-approves safe, reversible work. Pending requests carry a TTL and auto-expire. |
-| **Verification layer** | `verification.py` | After execution, independently checks claims in the output (HTTP 200 on URLs). With `fail_on_unverified`, a failed check flips the result and **auto-refunds** the action's budget. |
+| **Verification layer** | `verification.py` + `verifiers.py` | After execution, independently verifies the work. URL reachability is checked from the output; explicit `verify_actions` specs route to real verifiers — **deploy health** (HTTP status + body), **email deliverability** (SPF/DMARC/DKIM DNS), **Stripe webhook** (HMAC signature). With `fail_on_unverified`, a failed check flips the result and **auto-refunds** the action's budget. |
 
 ### Trust-layer endpoints
 
@@ -151,6 +151,31 @@ await orch.initialize()
 res = await orch.orchestrate("Send cold outreach to 50 leads")  # -> awaiting_approval
 await orch.decide_approval(res["approval"]["id"], approved=True)
 ```
+
+```python
+# Live demand signals behind the scorer interface (key-free public sources).
+from orchestrator_agent import ValidationGate
+gate = ValidationGate.with_live_signals()
+result = await gate.validate("AI cold-outreach tool for B2B SaaS founders")
+print(result.score.value, result.details["sources"])
+
+# Real side-effecting verifiers for genuine actions.
+from orchestrator_agent import VerificationLayer
+layer = VerificationLayer(fail_on_unverified=True).register_defaults()
+checks = await layer.verify_actions([
+    {"type": "deploy_health", "url": "https://my-landing.vercel.app",
+     "expect_substring": "Get started"},
+    {"type": "email_deliverability", "domain": "mycompany.com"},
+    {"type": "stripe_webhook", "payload": raw_body,
+     "signature": stripe_sig_header, "secret": webhook_secret},
+])
+```
+
+### Live web console
+
+`web/live.html` is a zero-build operator console that connects to this API
+(`/v2/status`, `/v2/health`, `/v2/approvals`) and drives the approval queue from
+the browser. CORS is enabled on the server for local development.
 
 ## Python SDK Usage
 

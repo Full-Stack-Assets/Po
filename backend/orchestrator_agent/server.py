@@ -8,8 +8,9 @@ from typing import List, Optional
 import json
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator_agent.models import ExecutionMode
 from orchestrator_agent.orchestrator import OrchestratorAgent
@@ -18,6 +19,15 @@ app = FastAPI(
     title="Constraint-Optimized LLM Agent Orchestrator",
     description="Multi-provider agent orchestration API",
     version="2.0.0",
+)
+
+# Allow the static web dashboard (served from a different origin/port) to
+# call the API in development. Tighten allow_origins for production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 orchestrator = OrchestratorAgent()
@@ -34,11 +44,15 @@ async def shutdown():
 
 
 class OrchestrationRequest(BaseModel):
+    # populate_by_name lets the JSON key stay "validate" while the Python
+    # attribute is "validate_idea" (avoids shadowing BaseModel.validate).
+    model_config = ConfigDict(populate_by_name=True)
+
     input: str
     conversation_id: Optional[str] = ""
     mode: Optional[str] = "sequential"
     stream: Optional[bool] = False
-    validate: Optional[bool] = False
+    validate_idea: Optional[bool] = Field(default=False, alias="validate")
     validation_override: Optional[bool] = False
 
 
@@ -68,7 +82,7 @@ async def orchestrate(req: OrchestrationRequest):
     mode = ExecutionMode(req.mode) if req.mode else ExecutionMode.SEQUENTIAL
     return await orchestrator.orchestrate(
         req.input, req.conversation_id or "", mode,
-        validate=bool(req.validate),
+        validate=bool(req.validate_idea),
         validation_override=bool(req.validation_override),
     )
 

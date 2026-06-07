@@ -62,11 +62,43 @@ class VerificationLayer:
         enabled: bool = True,
         fail_on_unverified: bool = False,
         timeout_seconds: int = 10,
+        verifiers: Optional[Dict[str, Any]] = None,
     ):
         self._fetcher = fetcher
         self.enabled = enabled
         self.fail_on_unverified = fail_on_unverified
         self.timeout_seconds = timeout_seconds
+        # Registry of side-effecting verifiers keyed by checker_type.
+        self._verifiers: Dict[str, Any] = dict(verifiers or {})
+
+    def register(self, verifier: Any) -> "VerificationLayer":
+        """Register a Verifier (from verifiers.py) by its checker_type."""
+        self._verifiers[verifier.checker_type] = verifier
+        return self
+
+    def register_defaults(self, **kwargs: Any) -> "VerificationLayer":
+        """Register the standard deploy/email/stripe verifiers."""
+        from orchestrator_agent.verifiers import default_verifiers
+        self._verifiers.update(default_verifiers(**kwargs))
+        return self
+
+    async def verify_actions(
+        self, specs: List[Dict[str, Any]]
+    ) -> List[VerificationResult]:
+        """Verify explicit action specs by routing on ``spec['type']``."""
+        if not self.enabled:
+            return []
+        results: List[VerificationResult] = []
+        for spec in specs:
+            ctype = spec.get("type", "")
+            verifier = self._verifiers.get(ctype)
+            if verifier is None:
+                results.append(VerificationResult(
+                    checker_type=ctype or "unknown", passed=False,
+                    details={"error": f"no verifier for type '{ctype}'"}))
+                continue
+            results.append(await verifier.verify(spec))
+        return results
 
     @staticmethod
     def extract_urls(text: str) -> List[str]:

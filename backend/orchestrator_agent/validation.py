@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
+import asyncio
 import json
 import logging
 import re
@@ -94,22 +95,42 @@ class ValidationGate:
         green_threshold: int = 70,
         red_threshold: int = 40,
         weights: Optional[Dict[str, float]] = None,
+        scorers: Optional[Dict[str, Any]] = None,
     ):
         self.llm = llm
         self.green_threshold = green_threshold
         self.red_threshold = red_threshold
         self.weights = weights or dict(self.DEFAULT_WEIGHTS)
+        # Optional pluggable per-dimension signal scorers (see signals.py).
+        self.scorers = scorers
+
+    @classmethod
+    def with_live_signals(
+        cls,
+        llm: Optional[Any] = None,
+        fetch: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> "ValidationGate":
+        """Build a gate backed by live network signal scorers."""
+        from orchestrator_agent.signals import default_live_scorers
+        return cls(llm=llm, scorers=default_live_scorers(fetch), **kwargs)
 
     async def validate(self, idea: str) -> ValidationResult:
-        backend = "heuristic"
-        scores: Optional[Dict[str, int]] = None
-        if self.llm is not None:
+        details: Dict[str, Any] = {"weights": self.weights}
+        if self.scorers:
+            scores, sources = await self._composite_scores(idea)
+            backend = "composite"
+            details["sources"] = sources
+        elif self.llm is not None:
             scores = await self._llm_scores(idea)
             if scores is not None:
                 backend = "llm"
-        if scores is None:
-            scores = self._heuristic_scores(idea)
+            else:
+                scores, backend = self._heuristic_scores(idea), "heuristic"
+        else:
+            scores, backend = self._heuristic_scores(idea), "heuristic"
 
+        details["raw_scores"] = scores
         overall = round(sum(scores[k] * self.weights[k] for k in self.weights))
         rating = self._rate(overall)
         return ValidationResult(
@@ -123,8 +144,33 @@ class ValidationGate:
             rationale=self._rationale(rating, overall),
             override_required=(rating == ValidationScore.RED),
             backend=backend,
-            details={"weights": self.weights, "raw_scores": scores},
+            details=details,
         )
+
+    async def _composite_scores(self, idea: str):
+        """Run each pluggable scorer; fall back to heuristic per dimension."""
+        heur = self._heuristic_scores(idea)
+        scores: Dict[str, int] = {}
+        sources: Dict[str, str] = {}
+
+        async def run(dim: str):
+            scorer = self.scorers.get(dim)
+            if scorer is None:
+                scores[dim], sources[dim] = heur[dim], "heuristic"
+                return
+            try:
+                sub = await scorer.score(idea)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"scorer '{dim}' failed: {e}")
+                sub = None
+            if sub is None:
+                scores[dim], sources[dim] = heur[dim], "heuristic(fallback)"
+            else:
+                scores[dim], sources[dim] = sub.value, sub.source
+
+        await asyncio.gather(*(run(d) for d in
+                               ("demand", "competitor", "icp", "wtp")))
+        return scores, sources
 
     def _rate(self, overall: int) -> ValidationScore:
         if overall >= self.green_threshold:

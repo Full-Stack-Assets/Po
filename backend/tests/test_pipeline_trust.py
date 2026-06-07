@@ -142,6 +142,25 @@ async def test_verification_records_summary():
 
 
 @pytest.mark.asyncio
+async def test_pipeline_verifies_declared_action_specs():
+    from orchestrator_agent.verifiers import HttpDeployVerifier
+
+    async def fetch(url):
+        return 200, "live"
+
+    layer = VerificationLayer()
+    layer.register(HttpDeployVerifier(fetch))
+    pipeline, _ = make_pipeline(StubAgent(output="shipped"),
+                                verification_layer=layer)
+    task = Task(input_text="deploy", intent="code",
+                metadata={"verify_actions": [
+                    {"type": "deploy_health", "url": "https://po.app"}]})
+    result = await pipeline.execute_task(task, TaskContext())
+    assert result.metadata["verification"]["all_passed"] is True
+    assert result.metadata["verification"]["checked"] == 1
+
+
+@pytest.mark.asyncio
 async def test_verification_failure_refunds_budget():
     async def fetcher(url):
         return 500

@@ -247,7 +247,7 @@ class ExecutionPipeline:
             self.constraint_engine.consume("token_budget", result.tokens_used)
             self.constraint_engine.consume("cost_budget", result.cost)
             # ── 3. Verification layer (post-execution) ─────────────────
-            await self._run_verification(result)
+            await self._run_verification(result, task)
             task.status = (
                 TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
             )
@@ -306,10 +306,18 @@ class ExecutionPipeline:
                       "approval_type": atype.value},
         )
 
-    async def _run_verification(self, result: AgentResult) -> None:
-        if not (self.verification_layer and result.success):
+    async def _run_verification(self, result: AgentResult,
+                                task: Optional[Task] = None) -> None:
+        if not self.verification_layer:
             return
-        vresults = await self.verification_layer.verify_output(result.output)
+        vresults = []
+        if result.success:
+            vresults += await self.verification_layer.verify_output(
+                result.output)
+        # Explicit, side-effecting action checks declared on the task.
+        specs = task.metadata.get("verify_actions") if task else None
+        if specs:
+            vresults += await self.verification_layer.verify_actions(specs)
         if not vresults:
             return
         summary = self.verification_layer.summarize(vresults)
