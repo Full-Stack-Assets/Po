@@ -30,6 +30,8 @@ from orchestrator_agent.persistence import (
     TrustStore, InMemoryTrustStore, create_trust_store,
 )
 from orchestrator_agent.checkpoint import Checkpointer, WorkflowRunner
+import json
+import re
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -746,6 +748,81 @@ class OrchestratorAgent:
     async def get_workflow(self, thread_id: str) -> Optional[Dict[str, Any]]:
         state = await self.checkpointer.load(thread_id)
         return state.to_dict() if state else None
+
+    async def plan_and_run_workflow(
+        self, goal: str, conversation_id: str = "",
+        thread_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Send a high-level goal to PlannerAgent, parse the plan into
+        workflow steps, and execute them through the checkpointed runner."""
+        if not self._initialized:
+            raise RuntimeError("Call initialize() first")
+        context = self._get_context(conversation_id)
+        context.add_message("user", goal)
+
+        planner = self.registry.find_for_intent("plan")
+        if not planner:
+            raise RuntimeError("PlannerAgent not registered")
+        plan_task = Task(input_text=goal, intent="plan")
+        plan_result = await planner[0].execute(plan_task, context)
+        if not plan_result.success:
+            return {"error": f"Planning failed: {plan_result.error}",
+                    "success": False}
+
+        steps = self._parse_plan(plan_result.output)
+        if not steps:
+            return {"error": "Planner returned no actionable steps",
+                    "plan_raw": plan_result.output, "success": False}
+
+        state = await self.workflow_runner.run(
+            steps, context, thread_id=thread_id)
+        result = state.to_dict()
+        result["plan_raw"] = plan_result.output
+        return result
+
+    @staticmethod
+    def _parse_plan(raw: str) -> List[Dict[str, str]]:
+        """Extract a JSON step array from the PlannerAgent's output.
+
+        The planner is prompted to return a JSON array, but it may wrap
+        it in markdown fences or surrounding prose.  We extract the
+        first ``[...]`` block and map each element to a workflow step.
+        """
+        # Strip markdown code fences if present.
+        cleaned = re.sub(r"```(?:json)?\s*", "", raw).replace("```", "")
+        # Find the first JSON array.
+        match = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        if not match:
+            return []
+        try:
+            items = json.loads(match.group())
+        except (json.JSONDecodeError, ValueError):
+            return []
+        if not isinstance(items, list):
+            return []
+
+        _AGENT_TO_INTENT = {
+            "research": "research", "write": "write", "code": "code",
+            "analyze": "analyze", "analysis": "analyze",
+            "summarize": "summarize", "summary": "summarize",
+            "plan": "plan",
+        }
+        steps: List[Dict[str, str]] = []
+        for item in items:
+            if isinstance(item, str):
+                steps.append({"input": item, "intent": "research"})
+                continue
+            if not isinstance(item, dict):
+                continue
+            description = (item.get("description") or item.get("task")
+                           or item.get("input") or "")
+            if not description:
+                continue
+            agent_type = (item.get("agent_type") or item.get("type")
+                          or item.get("intent") or "research")
+            intent = _AGENT_TO_INTENT.get(agent_type.lower(), agent_type.lower())
+            steps.append({"input": description, "intent": intent})
+        return steps
 
     async def list_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
         return await self.store.list_runs(limit) if self.store else []

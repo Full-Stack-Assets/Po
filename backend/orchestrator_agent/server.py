@@ -4,7 +4,7 @@ Run: uvicorn orchestrator_agent.server:app --reload
 """
 
 from __future__ import annotations
-from typing import List, Optional
+from typing import Any, List, Optional
 import json
 
 from fastapi import FastAPI
@@ -75,6 +75,12 @@ class WorkflowRequest(BaseModel):
     default_intent: Optional[str] = None
 
 
+class WorkflowPlanRequest(BaseModel):
+    goal: str
+    conversation_id: Optional[str] = ""
+    thread_id: Optional[str] = None
+
+
 class WorkflowResumeRequest(BaseModel):
     conversation_id: Optional[str] = ""
 
@@ -125,6 +131,13 @@ async def decide_approval(approval_id: str, req: ApprovalDecisionRequest):
         edited_input=req.edited_input,
         conversation_id=req.conversation_id or "",
     )
+
+
+@app.post("/v2/workflows/plan")
+async def plan_workflow(req: WorkflowPlanRequest):
+    """Auto-generate and run a workflow from a high-level goal."""
+    return await orchestrator.plan_and_run_workflow(
+        req.goal, req.conversation_id or "", req.thread_id)
 
 
 @app.post("/v2/workflows")

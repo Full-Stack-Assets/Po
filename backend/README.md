@@ -203,6 +203,7 @@ LangGraph's `interrupt()` + persistent checkpointer.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| POST | `/v2/workflows/plan` | Auto-generate and run a workflow from a goal |
 | POST | `/v2/workflows` | Start a workflow `{steps: [...], thread_id?}` |
 | POST | `/v2/workflows/{thread_id}/resume` | Resume after a crash, failure, or approval |
 | GET | `/v2/workflows/{thread_id}` | Current workflow state |
@@ -216,6 +217,11 @@ state = await orch.run_workflow([
 if state["status"] == "awaiting_approval":
     await orch.decide_approval(state["pending_approval_id"], approved=True)
     state = await orch.resume_workflow(state["thread_id"])  # continues to the end
+
+# Or let the PlannerAgent decompose a high-level goal automatically.
+state = await orch.plan_and_run_workflow("Grow my B2B SaaS to 100 users")
+# The planner generates ordered sub-tasks with intent mapping, then the
+# checkpointed runner executes them — pausing for approval on risky steps.
 ```
 
 ### Live web console

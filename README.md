@@ -113,8 +113,8 @@ cd web && python3 -m http.server 5173
 - ✅ **Checkpointed multi-step workflows** (`checkpoint.py`): a `WorkflowRunner`
   saves a `WorkflowState` after every step and resumes from the last checkpoint
   after a crash, failure, or approval pause. Endpoints `/v2/workflows[/{id}]`.
-- **76/76 unit tests passing** (74 + 2 Postgres tests that run when
-  `DATABASE_URL` is set; runs/stats and checkpoint SQL validated against a real
-  PostgreSQL).
-- ⬜ Auto-generate workflow steps from the `PlannerAgent` (currently
-  caller-provided).
+- ✅ **Auto-generated workflow plans** from `PlannerAgent`: a single high-level
+  goal is decomposed into ordered sub-tasks with intent mapping, then executed
+  through the checkpointed workflow runner. Endpoint `POST /v2/workflows/plan`.
+- **85/85 unit tests passing** (83 + 2 Postgres tests that run when
+  `DATABASE_URL` is set).
