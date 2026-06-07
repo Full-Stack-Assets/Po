@@ -44,6 +44,9 @@ from orchestrator_agent.approvals import (
 from orchestrator_agent.persistence import (
     TrustStore, InMemoryTrustStore, PostgresTrustStore, create_trust_store,
 )
+from orchestrator_agent.checkpoint import (
+    WorkflowRunner, WorkflowState, Checkpointer,
+)
 
 __all__ = [
     "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
@@ -66,4 +69,5 @@ __all__ = [
     "ApprovalDecision", "ApprovalType",
     "TrustStore", "InMemoryTrustStore", "PostgresTrustStore",
     "create_trust_store",
+    "WorkflowRunner", "WorkflowState", "Checkpointer",
 ]

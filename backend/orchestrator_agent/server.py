@@ -68,6 +68,17 @@ class ApprovalDecisionRequest(BaseModel):
     conversation_id: Optional[str] = ""
 
 
+class WorkflowRequest(BaseModel):
+    steps: List[Any]
+    conversation_id: Optional[str] = ""
+    thread_id: Optional[str] = None
+    default_intent: Optional[str] = None
+
+
+class WorkflowResumeRequest(BaseModel):
+    conversation_id: Optional[str] = ""
+
+
 @app.post("/v2/orchestrate")
 async def orchestrate(req: OrchestrationRequest):
     if req.stream:
@@ -114,6 +125,26 @@ async def decide_approval(approval_id: str, req: ApprovalDecisionRequest):
         edited_input=req.edited_input,
         conversation_id=req.conversation_id or "",
     )
+
+
+@app.post("/v2/workflows")
+async def start_workflow(req: WorkflowRequest):
+    """Run a checkpointed multi-step workflow."""
+    return await orchestrator.run_workflow(
+        req.steps, req.conversation_id or "", req.thread_id, req.default_intent)
+
+
+@app.post("/v2/workflows/{thread_id}/resume")
+async def resume_workflow(thread_id: str, req: WorkflowResumeRequest):
+    """Resume a paused/failed/interrupted workflow from its checkpoint."""
+    return await orchestrator.resume_workflow(
+        thread_id, req.conversation_id or "")
+
+
+@app.get("/v2/workflows/{thread_id}")
+async def get_workflow(thread_id: str):
+    state = await orchestrator.get_workflow(thread_id)
+    return state or {"error": f"no workflow '{thread_id}'"}
 
 
 @app.get("/v2/runs")

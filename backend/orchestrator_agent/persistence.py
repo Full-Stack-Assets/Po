@@ -51,6 +51,20 @@ class TrustStore(ABC):
     @abstractmethod
     async def stats(self) -> Dict[str, Any]: ...
 
+    # ── Checkpoints (multi-step workflow resume) ───────────────────────
+    @abstractmethod
+    async def save_checkpoint(self, checkpoint: Dict[str, Any]) -> None: ...
+
+    @abstractmethod
+    async def load_checkpoint(
+        self, thread_id: str) -> Optional[Dict[str, Any]]: ...
+
+    @abstractmethod
+    async def delete_checkpoint(self, thread_id: str) -> None: ...
+
+    @abstractmethod
+    async def list_checkpoints(self) -> List[Dict[str, Any]]: ...
+
     async def close(self) -> None: ...
 
 
@@ -65,6 +79,7 @@ class InMemoryTrustStore(TrustStore):
         self._approvals: Dict[str, Dict[str, Any]] = {}
         self._runs: List[Dict[str, Any]] = []
         self._validations: List[Dict[str, Any]] = []
+        self._checkpoints: Dict[str, Dict[str, Any]] = {}
 
     async def upsert_approval(self, approval: Dict[str, Any]) -> None:
         self._approvals[approval["approval_id"]] = dict(approval)
@@ -112,6 +127,19 @@ class InMemoryTrustStore(TrustStore):
             "approvals_pending": pending,
         }
 
+    async def save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        self._checkpoints[checkpoint["thread_id"]] = dict(checkpoint)
+
+    async def load_checkpoint(
+        self, thread_id: str) -> Optional[Dict[str, Any]]:
+        return self._checkpoints.get(thread_id)
+
+    async def delete_checkpoint(self, thread_id: str) -> None:
+        self._checkpoints.pop(thread_id, None)
+
+    async def list_checkpoints(self) -> List[Dict[str, Any]]:
+        return list(self._checkpoints.values())
+
 
 # ── Postgres backend ───────────────────────────────────────────────────
 
@@ -157,6 +185,13 @@ CREATE TABLE IF NOT EXISTS validations (
     wtp_score        integer,
     backend          text,
     created_at       timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS checkpoints (
+    thread_id   text PRIMARY KEY,
+    state       jsonb,
+    step_index  integer,
+    status      text,
+    updated_at  timestamptz DEFAULT now()
 );
 """
 
@@ -273,6 +308,43 @@ class PostgresTrustStore(TrustStore):
             "approvals_total": atotal or 0,
             "approvals_pending": apend or 0,
         }
+
+    async def save_checkpoint(self, c: Dict[str, Any]) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """INSERT INTO checkpoints (thread_id, state, step_index,
+                       status, updated_at)
+                   VALUES ($1,$2::jsonb,$3,$4, now())
+                   ON CONFLICT (thread_id) DO UPDATE SET
+                       state=$2::jsonb, step_index=$3, status=$4,
+                       updated_at=now()""",
+                c["thread_id"], json.dumps(c), c.get("step_index", 0),
+                c.get("status"),
+            )
+
+    async def load_checkpoint(
+        self, thread_id: str) -> Optional[Dict[str, Any]]:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchval(
+                "SELECT state FROM checkpoints WHERE thread_id=$1", thread_id)
+        if row is None:
+            return None
+        return json.loads(row) if isinstance(row, str) else dict(row)
+
+    async def delete_checkpoint(self, thread_id: str) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM checkpoints WHERE thread_id=$1", thread_id)
+
+    async def list_checkpoints(self) -> List[Dict[str, Any]]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT state FROM checkpoints ORDER BY updated_at DESC")
+        out = []
+        for r in rows:
+            s = r["state"]
+            out.append(json.loads(s) if isinstance(s, str) else dict(s))
+        return out
 
     async def close(self) -> None:
         if self._pool:

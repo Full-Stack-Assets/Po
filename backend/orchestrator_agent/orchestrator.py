@@ -26,7 +26,10 @@ from orchestrator_agent.approvals import (
     ApprovalManager, ApprovalPolicy, ApprovalDecision, ApprovalType,
     ApprovalRequest,
 )
-from orchestrator_agent.persistence import TrustStore, create_trust_store
+from orchestrator_agent.persistence import (
+    TrustStore, InMemoryTrustStore, create_trust_store,
+)
+from orchestrator_agent.checkpoint import Checkpointer, WorkflowRunner
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -567,6 +570,12 @@ class OrchestratorAgent:
             verification_layer=self.verification_layer,
             approval_manager=self.approval_manager,
         )
+        # Checkpointed multi-step workflows (resume across steps/restarts).
+        self.checkpointer = Checkpointer(self.store or InMemoryTrustStore())
+        self.workflow_runner = WorkflowRunner(
+            self.pipeline, self.checkpointer,
+            approval_manager=self.approval_manager,
+        )
         self._initialized = True
         logger.info("OrchestratorAgent v2 ready (trust layer enabled)")
 
@@ -712,6 +721,31 @@ class OrchestratorAgent:
             return {"success": result.success, "error": result.error}
         await self._persist(context, task, result)
         return self._result_payload(context, task, result)
+
+    async def run_workflow(self, steps: List[Any], conversation_id: str = "",
+                           thread_id: Optional[str] = None,
+                           default_intent: Optional[str] = None,
+                           ) -> Dict[str, Any]:
+        """Run a checkpointed multi-step workflow."""
+        if not self._initialized:
+            raise RuntimeError("Call initialize() first")
+        context = self._get_context(conversation_id)
+        state = await self.workflow_runner.run(
+            steps, context, thread_id=thread_id, default_intent=default_intent)
+        return state.to_dict()
+
+    async def resume_workflow(self, thread_id: str,
+                              conversation_id: str = "") -> Dict[str, Any]:
+        """Resume a paused/failed/interrupted workflow from its checkpoint."""
+        if not self._initialized:
+            raise RuntimeError("Call initialize() first")
+        context = self._get_context(conversation_id)
+        state = await self.workflow_runner.resume(thread_id, context)
+        return state.to_dict()
+
+    async def get_workflow(self, thread_id: str) -> Optional[Dict[str, Any]]:
+        state = await self.checkpointer.load(thread_id)
+        return state.to_dict() if state else None
 
     async def list_runs(self, limit: int = 50) -> List[Dict[str, Any]]:
         return await self.store.list_runs(limit) if self.store else []

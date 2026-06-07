@@ -111,3 +111,24 @@ async def test_postgres_roundtrip_runs_and_stats():
         assert stats["total_runs"] >= 1
     finally:
         await store.close()
+
+
+@requires_pg
+@pytest.mark.asyncio
+async def test_postgres_checkpoint_roundtrip():
+    store = PostgresTrustStore(_DSN)
+    await store.init()
+    try:
+        await store.save_checkpoint({
+            "thread_id": "pg-wf", "step_index": 2, "status": "running",
+            "steps": ["a", "b", "c"], "results": [{"step": "a"}],
+        })
+        loaded = await store.load_checkpoint("pg-wf")
+        assert loaded["step_index"] == 2
+        assert loaded["steps"] == ["a", "b", "c"]
+        assert any(c["thread_id"] == "pg-wf"
+                   for c in await store.list_checkpoints())
+        await store.delete_checkpoint("pg-wf")
+        assert await store.load_checkpoint("pg-wf") is None
+    finally:
+        await store.close()

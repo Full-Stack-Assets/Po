@@ -193,6 +193,31 @@ await orch.initialize()        # creates schema, hydrates pending approvals
 await orch.get_reliability_stats()
 ```
 
+### Checkpointed workflows (`checkpoint.py`)
+
+Multi-step plans run through a `WorkflowRunner` that saves a `WorkflowState`
+checkpoint after **every** step (keyed by `thread_id` in the `TrustStore`). If a
+step fails, the process restarts, or a step pauses for approval, the run resumes
+from the last checkpoint instead of starting over — the synchronous analogue of
+LangGraph's `interrupt()` + persistent checkpointer.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v2/workflows` | Start a workflow `{steps: [...], thread_id?}` |
+| POST | `/v2/workflows/{thread_id}/resume` | Resume after a crash, failure, or approval |
+| GET | `/v2/workflows/{thread_id}` | Current workflow state |
+
+```python
+# Steps are strings or {"input", "intent"}; risky intents pause for approval.
+state = await orch.run_workflow([
+    {"input": "research the ICP", "intent": "research"},
+    {"input": "draft cold outreach", "intent": "write"},   # -> awaiting_approval
+])
+if state["status"] == "awaiting_approval":
+    await orch.decide_approval(state["pending_approval_id"], approved=True)
+    state = await orch.resume_workflow(state["thread_id"])  # continues to the end
+```
+
 ### Live web console
 
 `web/live.html` is a zero-build operator console that connects to this API
