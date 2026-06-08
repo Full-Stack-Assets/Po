@@ -6,7 +6,7 @@
     "watchPatterns": ["backend/**"]
   },
   "deploy": {
-    "startCommand": "gunicorn orchestrator_agent.server:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -",
+    "startCommand": "/bin/sh -c \"gunicorn orchestrator_agent.server:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -\"",
     "healthcheckPath": "/v2/health",
     "healthcheckTimeout": 10,
     "restartPolicyType": "ON_FAILURE",
