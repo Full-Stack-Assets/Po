@@ -3,10 +3,10 @@ FROM python:3.12-slim AS base
 RUN groupadd -r po && useradd -r -g po -d /app po
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
-COPY orchestrator_agent/ orchestrator_agent/
+COPY backend/orchestrator_agent/ orchestrator_agent/
 
 RUN chown -R po:po /app
 USER po
