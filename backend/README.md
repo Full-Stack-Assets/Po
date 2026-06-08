@@ -119,6 +119,122 @@ curl -X POST http://localhost:8000/v2/batch \
   }'
 ```
 
+## Po Trust Layer
+
+On top of the orchestration core, three optional gates implement Po's
+"prove the work" differentiators (see the repo-root `README.md`). All are
+enabled by default and configured via `config["trust_layer"]`.
+
+| Gate | Module | What it does |
+|------|--------|--------------|
+| **Validation gate** | `validation.py` + `signals.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. Pluggable scorers behind a `SignalScorer` interface: LLM-backed, a deterministic heuristic, or **live signals** (Google Suggest demand/competitor, Reddit WTP) via `trust_layer.live_signals: true` or `ValidationGate.with_live_signals(...)` — each degrades to heuristic per-dimension when offline. |
+| **Approval gate** | `approvals.py` | Pauses risky intents (`write`→outreach, `code`→deploy) for one-tap human approve / edit / reject. Auto-approves safe, reversible work. Pending requests carry a TTL and auto-expire. |
+| **Verification layer** | `verification.py` + `verifiers.py` | After execution, independently verifies the work. URL reachability is checked from the output; explicit `verify_actions` specs route to real verifiers — **deploy health** (HTTP status + body), **email deliverability** (SPF/DMARC/DKIM DNS), **Stripe webhook** (HMAC signature). With `fail_on_unverified`, a failed check flips the result and **auto-refunds** the action's budget. |
+
+### Trust-layer endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v2/orchestrate` (`"validate": true`) | Run the validation gate before executing |
+| GET  | `/v2/approvals` | List pending approval requests |
+| POST | `/v2/approvals/{id}` | Approve / reject / edit and resume the task |
+
+```python
+# Validate before spending; override only if you really mean to.
+result = await orch.orchestrate("Build a CRM for dog walkers", validate=True)
+if result["validation"]["score"] == "red":
+    ...  # blocked — pass validation_override=True to force
+
+# Enable live network signals (Google Suggest, Reddit WTP) for validation.
+orch = OrchestratorAgent(config={"trust_layer": {"live_signals": True}})
+await orch.initialize()
+
+# Human-in-the-loop: risky tasks pause with auto_approve disabled.
+orch = OrchestratorAgent(config={"trust_layer": {"auto_approve": False}})
+await orch.initialize()
+res = await orch.orchestrate("Send cold outreach to 50 leads")  # -> awaiting_approval
+await orch.decide_approval(res["approval"]["id"], approved=True)
+```
+
+```python
+# Live demand signals behind the scorer interface (key-free public sources).
+from orchestrator_agent import ValidationGate
+gate = ValidationGate.with_live_signals()
+result = await gate.validate("AI cold-outreach tool for B2B SaaS founders")
+print(result.score.value, result.details["sources"])
+
+# Real side-effecting verifiers for genuine actions.
+from orchestrator_agent import VerificationLayer
+layer = VerificationLayer(fail_on_unverified=True).register_defaults()
+checks = await layer.verify_actions([
+    {"type": "deploy_health", "url": "https://my-landing.vercel.app",
+     "expect_substring": "Get started"},
+    {"type": "email_deliverability", "domain": "mycompany.com"},
+    {"type": "stripe_webhook", "payload": raw_body,
+     "signature": stripe_sig_header, "secret": webhook_secret},
+])
+```
+
+### Persistence (`persistence.py`)
+
+Approvals, runs, and validations are written through a `TrustStore`. With no
+database configured the default `InMemoryTrustStore` is used; set `DATABASE_URL`
+(and have `asyncpg` installed) to use `PostgresTrustStore`, which creates its
+schema on startup, **survives restarts** (pending approvals are rehydrated into
+the queue and can still be resumed), and powers the reliability metrics.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v2/runs?limit=N` | Recent orchestration runs (audit trail) |
+| GET | `/v2/stats` | Aggregate reliability metrics (success / verified-pass / refund rates) |
+
+```python
+orch = OrchestratorAgent(config={
+    "persistence": {"dsn": "postgresql://user:pass@localhost:5432/po"},
+})
+await orch.initialize()        # creates schema, hydrates pending approvals
+...
+await orch.get_reliability_stats()
+```
+
+### Checkpointed workflows (`checkpoint.py`)
+
+Multi-step plans run through a `WorkflowRunner` that saves a `WorkflowState`
+checkpoint after **every** step (keyed by `thread_id` in the `TrustStore`). If a
+step fails, the process restarts, or a step pauses for approval, the run resumes
+from the last checkpoint instead of starting over — the synchronous analogue of
+LangGraph's `interrupt()` + persistent checkpointer.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/v2/workflows/plan` | Auto-generate and run a workflow from a goal |
+| POST | `/v2/workflows` | Start a workflow `{steps: [...], thread_id?}` |
+| POST | `/v2/workflows/{thread_id}/resume` | Resume after a crash, failure, or approval |
+| GET | `/v2/workflows/{thread_id}` | Current workflow state |
+
+```python
+# Steps are strings or {"input", "intent"}; risky intents pause for approval.
+state = await orch.run_workflow([
+    {"input": "research the ICP", "intent": "research"},
+    {"input": "draft cold outreach", "intent": "write"},   # -> awaiting_approval
+])
+if state["status"] == "awaiting_approval":
+    await orch.decide_approval(state["pending_approval_id"], approved=True)
+    state = await orch.resume_workflow(state["thread_id"])  # continues to the end
+
+# Or let the PlannerAgent decompose a high-level goal automatically.
+state = await orch.plan_and_run_workflow("Grow my B2B SaaS to 100 users")
+# The planner generates ordered sub-tasks with intent mapping, then the
+# checkpointed runner executes them — pausing for approval on risky steps.
+```
+
+### Live web console
+
+`web/live.html` is a zero-build operator console that connects to this API
+(`/v2/status`, `/v2/health`, `/v2/approvals`, `/v2/stats`), shows the persisted
+reliability metrics, and drives the approval queue from the browser. CORS is
+enabled on the server for local development.
+
 ## Python SDK Usage
 
 ```python

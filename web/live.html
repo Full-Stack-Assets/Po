@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COO Engine — Live Dashboard</title>
+    <meta
+      name="description"
+      content="Live operator console wired to the orchestration backend: provider health, constraints, agents, and the human-in-the-loop approval queue."
+    />
+    <style>
+      :root {
+        --bg: #0a0a0f;
+        --panel: #14141c;
+        --border: #26263340;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #c084fc;
+        --green: #34d399;
+        --red: #f87171;
+        --yellow: #fbbf24;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0; background: var(--bg); color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+          sans-serif;
+        line-height: 1.5;
+      }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 24px; }
+      header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+        justify-content: space-between; margin-bottom: 20px; }
+      h1 { font-size: 22px; margin: 0; font-weight: 800; }
+      a { color: var(--accent); text-decoration: none; }
+      .conn { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      input[type="text"] {
+        background: #1f1f2b; border: 1px solid var(--border); color: var(--text);
+        border-radius: 8px; padding: 8px 12px; min-width: 240px; font-size: 14px;
+      }
+      button {
+        background: linear-gradient(135deg, #c084fc, #8b5cf6); color: #0a0a0f;
+        border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 700;
+        cursor: pointer; font-size: 14px;
+      }
+      button.ghost { background: var(--panel); color: var(--text);
+        border: 1px solid var(--border); }
+      button.reject { background: #2a1620; color: var(--red);
+        border: 1px solid #f8717140; }
+      button.approve { background: #11271f; color: var(--green);
+        border: 1px solid #34d39940; }
+      .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+        border: 1px solid var(--border); }
+      .badge.ok { color: var(--green); border-color: #34d39940; }
+      .badge.bad { color: var(--red); border-color: #f8717140; }
+      .grid { display: grid; gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+      .card { background: var(--panel); border: 1px solid var(--border);
+        border-radius: 14px; padding: 18px; }
+      .card h2 { font-size: 14px; text-transform: uppercase;
+        letter-spacing: 0.08em; color: var(--muted); margin: 0 0 14px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      td, th { text-align: left; padding: 6px 4px;
+        border-bottom: 1px solid var(--border); }
+      th { color: var(--muted); font-weight: 600; }
+      .bar { height: 6px; border-radius: 999px; background: #2a2a38;
+        overflow: hidden; margin-top: 4px; }
+      .bar > span { display: block; height: 100%;
+        background: linear-gradient(90deg, var(--accent), #8b5cf6); }
+      .muted { color: var(--muted); font-size: 13px; }
+      .approval { border: 1px solid var(--border); border-radius: 10px;
+        padding: 12px; margin-bottom: 10px; }
+      .approval .top { display: flex; justify-content: space-between;
+        gap: 8px; align-items: center; margin-bottom: 8px; }
+      .approval .actions { display: flex; gap: 8px; margin-top: 10px; }
+      .err { color: var(--red); font-size: 13px; margin-top: 8px; }
+      .full { grid-column: 1 / -1; }
+      .stats { display: flex; flex-wrap: wrap; gap: 18px; }
+      .stat { min-width: 120px; }
+      .stat .num { font-size: 26px; font-weight: 800; }
+      .stat .lbl { font-size: 12px; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 0.06em; }
+      .stat .num.green { color: var(--green); }
+      .stat .num.red { color: var(--red); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>COO Engine — Live</h1>
+        <div class="conn">
+          <input id="baseUrl" type="text" placeholder="http://localhost:8000" />
+          <button id="connect">Connect</button>
+          <span id="health" class="badge">disconnected</span>
+          <a href="./index.html">← home</a>
+        </div>
+      </header>
+
+      <p class="muted" id="hint">
+        Enter the backend URL and connect. This polls
+        <code>/v2/health</code>, <code>/v2/status</code>, and
+        <code>/v2/approvals</code> every few seconds.
+      </p>
+
+      <div class="grid">
+        <div class="card full">
+          <h2>Reliability (persisted)</h2>
+          <div id="stats"><p class="muted">—</p></div>
+        </div>
+        <div class="card full">
+          <h2>Human-in-the-loop approvals</h2>
+          <div id="approvals"><p class="muted">—</p></div>
+        </div>
+        <div class="card">
+          <h2>Constraints</h2>
+          <div id="constraints"><p class="muted">—</p></div>
+        </div>
+        <div class="card">
+          <h2>Provider health</h2>
+          <div id="providers"><p class="muted">—</p></div>
+        </div>
+        <div class="card">
+          <h2>Agents</h2>
+          <div id="agents"><p class="muted">—</p></div>
+        </div>
+        <div class="card">
+          <h2>Usage</h2>
+          <div id="usage"><p class="muted">—</p></div>
+        </div>
+      </div>
+      <p class="err" id="error"></p>
+    </div>
+
+    <script src="./assets/live.js"></script>
+  </body>
+</html>

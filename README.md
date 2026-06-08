@@ -91,7 +91,33 @@ cd web && python3 -m http.server 5173
 
 ## Status
 
-- ✅ Orchestration backend imported, parses clean, 13/13 unit tests passing.
+- ✅ Orchestration backend imported, parses clean.
 - ✅ COO Engine site (landing + simulated dashboard) imported.
-- ⬜ Validation gate, verification layer, and HITL approval gates (Phase 1 of the plan).
-- ⬜ Wire the web dashboard to live backend `/v2/status` + `/v2/health`.
+- ✅ **Validation gate, verification layer, and HITL approval gates** built and
+  wired into `ExecutionPipeline` + the API.
+  See [`backend/README.md`](./backend/README.md#po-trust-layer).
+- ✅ **Real validation signals** behind a `SignalScorer` interface
+  (`signals.py`): Google Suggest demand/competitor + Reddit WTP, with
+  per-dimension heuristic fallback. `ValidationGate.with_live_signals()`.
+- ✅ **Real side-effecting verifiers** (`verifiers.py`): deploy health (HTTP),
+  email deliverability (SPF/DMARC/DKIM), Stripe webhook (HMAC signature).
+- ✅ **Live web console** (`web/live.html`) wired to `/v2/status`, `/v2/health`,
+  and `/v2/approvals`, driving the approval queue. CORS enabled on the API.
+- ✅ **Trust-layer persistence** (`persistence.py`): `TrustStore` interface with
+  an in-memory default and a Postgres backend (`DATABASE_URL`). Persists
+  approvals / runs / validations, **rehydrates pending approvals on restart**
+  (resumable), and powers `/v2/runs` + `/v2/stats`. SQL validated against a real
+  PostgreSQL.
+- ✅ Live console shows persisted reliability metrics (`/v2/stats`) and is the
+  **default** dashboard CTA (browser simulation demoted to secondary).
+- ✅ **Checkpointed multi-step workflows** (`checkpoint.py`): a `WorkflowRunner`
+  saves a `WorkflowState` after every step and resumes from the last checkpoint
+  after a crash, failure, or approval pause. Endpoints `/v2/workflows[/{id}]`.
+- ✅ **Auto-generated workflow plans** from `PlannerAgent`: a single high-level
+  goal is decomposed into ordered sub-tasks with intent mapping, then executed
+  through the checkpointed workflow runner. Endpoint `POST /v2/workflows/plan`.
+- ✅ **End-to-end integration tests** through the real `OrchestratorAgent` with
+  a fake LLM provider: full orchestration, validation, plan→workflow, approval
+  gates, persistence, batch, and status/health paths exercised.
+- **95/95 tests passing** (93 + 2 Postgres tests that run when
+  `DATABASE_URL` is set).
