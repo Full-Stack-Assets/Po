@@ -454,6 +454,17 @@ def build_default_configs() -> List[ProviderConfig]:
             base_url="https://api.deepseek.com",
             default_model="deepseek-chat",
         ))
+    if os.environ.get("OPENROUTER_API_KEY"):
+        configs.append(ProviderConfig(
+            provider_type=ProviderType.OPENROUTER,
+            api_key=os.environ["OPENROUTER_API_KEY"],
+            default_model=os.environ.get(
+                "OPENROUTER_DEFAULT_MODEL", "openai/gpt-4.1-mini"),
+            extra={
+                "referer": os.environ.get("OPENROUTER_REFERER", ""),
+                "title": os.environ.get("OPENROUTER_TITLE", "Po AI Operator"),
+            },
+        ))
     ollama_url = os.environ.get("OLLAMA_BASE_URL", "")
     if ollama_url:
         configs.append(ProviderConfig(
@@ -476,6 +487,7 @@ def build_default_fallbacks() -> List[FallbackChain]:
             ProviderType.OPENAI, oai
         ).add(ProviderType.ANTHROPIC, "claude-sonnet-4-5"
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
+        ).add(ProviderType.OPENROUTER, "openai/gpt-4.1"
         ).add(ProviderType.MISTRAL, "mistral-large-latest"
         ).add(ProviderType.OLLAMA, "llama3"),
 
@@ -483,6 +495,7 @@ def build_default_fallbacks() -> List[FallbackChain]:
             ProviderType.ANTHROPIC, "claude-sonnet-4-5"
         ).add(ProviderType.OPENAI, oai_code
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
+        ).add(ProviderType.OPENROUTER, "anthropic/claude-sonnet-4-5"
         ).add(ProviderType.MISTRAL, "codestral-latest"
         ).add(ProviderType.OLLAMA, "codellama"),
 
@@ -490,12 +503,14 @@ def build_default_fallbacks() -> List[FallbackChain]:
             ProviderType.ANTHROPIC, "claude-sonnet-4-5"
         ).add(ProviderType.OPENAI, oai
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
+        ).add(ProviderType.OPENROUTER, "anthropic/claude-sonnet-4-5"
         ).add(ProviderType.MISTRAL, "mistral-large-latest"
         ).add(ProviderType.OLLAMA, "llama3"),
 
         FallbackChain("fast").add(
             ProviderType.OPENAI, oai_fast
         ).add(ProviderType.GEMINI, "gemini-2.0-flash"
+        ).add(ProviderType.OPENROUTER, "openai/gpt-4.1-mini"
         ).add(ProviderType.MISTRAL, "mistral-small-latest"
         ).add(ProviderType.ANTHROPIC, "claude-haiku-3.5"),
     ]
