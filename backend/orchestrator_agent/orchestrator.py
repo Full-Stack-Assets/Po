@@ -10,10 +10,10 @@ import os
 
 from orchestrator_agent.models import (
     Task, TaskContext, TaskStatus, AgentResult, AgentProfile,
-    AgentCapability, Constraint, ExecutionMode,
+    Constraint, ExecutionMode,
 )
 from orchestrator_agent.llm_providers import (
-    Message, LLMResponse, LLMChunk, ProviderConfig, ProviderType,
+    Message, ProviderConfig, ProviderType,
 )
 from orchestrator_agent.llm_manager import LLMManager, FallbackChain
 from orchestrator_agent.agents import (
@@ -23,7 +23,7 @@ from orchestrator_agent.agents import (
 from orchestrator_agent.validation import ValidationGate, ValidationResult
 from orchestrator_agent.verification import VerificationLayer
 from orchestrator_agent.approvals import (
-    ApprovalManager, ApprovalPolicy, ApprovalDecision, ApprovalType,
+    ApprovalManager, ApprovalDecision,
     ApprovalRequest,
 )
 from orchestrator_agent.persistence import (
