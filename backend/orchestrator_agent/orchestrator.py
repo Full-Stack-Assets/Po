@@ -542,9 +542,12 @@ class OrchestratorAgent:
 
         # ── Po trust layer ─────────────────────────────────────────────
         trust = self.config.get("trust_layer", {})
-        self.validation_gate = (
-            ValidationGate(self.llm) if trust.get("validation", True) else None
-        )
+        if not trust.get("validation", True):
+            self.validation_gate = None
+        elif trust.get("live_signals", False):
+            self.validation_gate = ValidationGate.with_live_signals(self.llm)
+        else:
+            self.validation_gate = ValidationGate(self.llm)
         self.verification_layer = VerificationLayer(
             enabled=trust.get("verification", True),
             fail_on_unverified=trust.get("fail_on_unverified", False),

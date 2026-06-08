@@ -74,3 +74,20 @@ async def test_llm_failure_falls_back_to_heuristic():
     gate = ValidationGate(FakeLLM())
     result = await gate.validate("A paid B2B SaaS for founders")
     assert result.backend == "heuristic"
+
+
+def test_with_live_signals_wires_scorers():
+    gate = ValidationGate.with_live_signals()
+    assert gate.scorers is not None
+    assert set(gate.scorers.keys()) == {"demand", "competitor", "icp", "wtp"}
+
+
+@pytest.mark.asyncio
+async def test_live_signals_composite_backend():
+    async def fake_fetch(url):
+        return []  # empty results → scorers fall back to heuristic per-dim
+
+    gate = ValidationGate.with_live_signals(fetch=fake_fetch)
+    result = await gate.validate("A paid B2B SaaS for indie founders")
+    assert result.backend == "composite"
+    assert "sources" in result.details

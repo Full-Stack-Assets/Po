@@ -127,7 +127,7 @@ enabled by default and configured via `config["trust_layer"]`.
 
 | Gate | Module | What it does |
 |------|--------|--------------|
-| **Validation gate** | `validation.py` + `signals.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. Pluggable scorers behind a `SignalScorer` interface: LLM-backed, a deterministic heuristic, or **live signals** (Google Suggest demand/competitor, Reddit WTP) via `ValidationGate.with_live_signals(...)` — each degrades to heuristic per-dimension when offline. |
+| **Validation gate** | `validation.py` + `signals.py` | Scores an idea (demand / competitor / ICP / WTP) → red/yellow/green. A RED rating is **blocking** unless overridden. Pluggable scorers behind a `SignalScorer` interface: LLM-backed, a deterministic heuristic, or **live signals** (Google Suggest demand/competitor, Reddit WTP) via `trust_layer.live_signals: true` or `ValidationGate.with_live_signals(...)` — each degrades to heuristic per-dimension when offline. |
 | **Approval gate** | `approvals.py` | Pauses risky intents (`write`→outreach, `code`→deploy) for one-tap human approve / edit / reject. Auto-approves safe, reversible work. Pending requests carry a TTL and auto-expire. |
 | **Verification layer** | `verification.py` + `verifiers.py` | After execution, independently verifies the work. URL reachability is checked from the output; explicit `verify_actions` specs route to real verifiers — **deploy health** (HTTP status + body), **email deliverability** (SPF/DMARC/DKIM DNS), **Stripe webhook** (HMAC signature). With `fail_on_unverified`, a failed check flips the result and **auto-refunds** the action's budget. |
 
@@ -144,6 +144,10 @@ enabled by default and configured via `config["trust_layer"]`.
 result = await orch.orchestrate("Build a CRM for dog walkers", validate=True)
 if result["validation"]["score"] == "red":
     ...  # blocked — pass validation_override=True to force
+
+# Enable live network signals (Google Suggest, Reddit WTP) for validation.
+orch = OrchestratorAgent(config={"trust_layer": {"live_signals": True}})
+await orch.initialize()
 
 # Human-in-the-loop: risky tasks pause with auto_approve disabled.
 orch = OrchestratorAgent(config={"trust_layer": {"auto_approve": False}})
