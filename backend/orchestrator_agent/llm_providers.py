@@ -309,11 +309,14 @@ class AnthropicProvider(BaseLLMProvider):
 
     async def initialize(self) -> None:
         from anthropic import AsyncAnthropic
-        self._client = AsyncAnthropic(
+        kwargs = dict(
             api_key=self.config.api_key,
             timeout=self.config.timeout_seconds,
             max_retries=self.config.max_retries,
         )
+        if self.config.base_url:
+            kwargs["base_url"] = self.config.base_url
+        self._client = AsyncAnthropic(**kwargs)
         logger.info("Anthropic provider initialized")
 
     async def complete(self, messages: List[Message], model: Optional[str] = None,

@@ -419,7 +419,8 @@ def build_default_configs() -> List[ProviderConfig]:
         configs.append(ProviderConfig(
             provider_type=ProviderType.ANTHROPIC,
             api_key=os.environ["ANTHROPIC_API_KEY"],
-            default_model="claude-sonnet-4-5",
+            base_url=os.environ.get("ANTHROPIC_BASE_URL") or None,
+            default_model="claude-haiku-3.5",
         ))
     if (os.environ.get("AZURE_OPENAI_API_KEY")
             and os.environ.get("AZURE_OPENAI_ENDPOINT")):
