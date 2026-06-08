@@ -32,7 +32,7 @@ jobs:
       - name: Build static export
         working-directory: web-app
         env:
-          NEXT_PUBLIC_API_URL: ""
+          NEXT_PUBLIC_API_URL: "https://po-production-2afa.up.railway.app"
         run: |
           cat > next.config.js << 'CONF'
           /** @type {import('next').NextConfig} */
