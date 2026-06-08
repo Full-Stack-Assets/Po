@@ -447,6 +447,13 @@ def build_default_configs() -> List[ProviderConfig]:
             api_key=os.environ["MISTRAL_API_KEY"],
             default_model="mistral-small-latest",
         ))
+    if os.environ.get("DEEPSEEK_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+        configs.append(ProviderConfig(
+            provider_type=ProviderType.OPENAI,
+            api_key=os.environ["DEEPSEEK_API_KEY"],
+            base_url="https://api.deepseek.com",
+            default_model="deepseek-chat",
+        ))
     ollama_url = os.environ.get("OLLAMA_BASE_URL", "")
     if ollama_url:
         configs.append(ProviderConfig(
@@ -458,9 +465,15 @@ def build_default_configs() -> List[ProviderConfig]:
 
 
 def build_default_fallbacks() -> List[FallbackChain]:
+    is_deepseek = (os.environ.get("DEEPSEEK_API_KEY")
+                   and not os.environ.get("OPENAI_API_KEY"))
+    oai = ("deepseek-chat" if is_deepseek else "gpt-4.1")
+    oai_code = ("deepseek-chat" if is_deepseek else "o4-mini")
+    oai_fast = ("deepseek-chat" if is_deepseek else "gpt-4.1-nano")
+
     return [
         FallbackChain("research").add(
-            ProviderType.OPENAI, "gpt-4.1"
+            ProviderType.OPENAI, oai
         ).add(ProviderType.ANTHROPIC, "claude-sonnet-4-5"
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
         ).add(ProviderType.MISTRAL, "mistral-large-latest"
@@ -468,20 +481,20 @@ def build_default_fallbacks() -> List[FallbackChain]:
 
         FallbackChain("code").add(
             ProviderType.ANTHROPIC, "claude-sonnet-4-5"
-        ).add(ProviderType.OPENAI, "o4-mini"
+        ).add(ProviderType.OPENAI, oai_code
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
         ).add(ProviderType.MISTRAL, "codestral-latest"
         ).add(ProviderType.OLLAMA, "codellama"),
 
         FallbackChain("writing").add(
             ProviderType.ANTHROPIC, "claude-sonnet-4-5"
-        ).add(ProviderType.OPENAI, "gpt-4.1"
+        ).add(ProviderType.OPENAI, oai
         ).add(ProviderType.GEMINI, "gemini-2.5-pro"
         ).add(ProviderType.MISTRAL, "mistral-large-latest"
         ).add(ProviderType.OLLAMA, "llama3"),
 
         FallbackChain("fast").add(
-            ProviderType.OPENAI, "gpt-4.1-nano"
+            ProviderType.OPENAI, oai_fast
         ).add(ProviderType.GEMINI, "gemini-2.0-flash"
         ).add(ProviderType.MISTRAL, "mistral-small-latest"
         ).add(ProviderType.ANTHROPIC, "claude-haiku-3.5"),

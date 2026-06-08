@@ -132,6 +132,9 @@ MODEL_COSTS: Dict[str, Tuple[float, float]] = {
     "mistral-large-latest":  (0.002,  0.006),
     "mistral-small-latest":  (0.0001, 0.0003),
     "codestral-latest":      (0.0003, 0.0009),
+    # DeepSeek (OpenAI-compatible)
+    "deepseek-chat":         (0.00014, 0.00028),
+    "deepseek-reasoner":     (0.00055, 0.00219),
     # Ollama (local — zero cost)
     "llama3":                (0.0, 0.0),
     "codellama":             (0.0, 0.0),
@@ -214,12 +217,15 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def initialize(self) -> None:
         from openai import AsyncOpenAI
-        self._client = AsyncOpenAI(
+        kwargs = dict(
             api_key=self.config.api_key,
             organization=self.config.organization,
             timeout=self.config.timeout_seconds,
             max_retries=self.config.max_retries,
         )
+        if self.config.base_url:
+            kwargs["base_url"] = self.config.base_url
+        self._client = AsyncOpenAI(**kwargs)
         logger.info("OpenAI provider initialized")
 
     async def complete(self, messages: List[Message], model: Optional[str] = None,
