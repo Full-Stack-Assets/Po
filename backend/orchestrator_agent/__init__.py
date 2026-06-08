@@ -47,6 +47,14 @@ from orchestrator_agent.persistence import (
 from orchestrator_agent.checkpoint import (
     WorkflowRunner, WorkflowState, Checkpointer,
 )
+from orchestrator_agent.tools import (
+    Tool, ToolResult, ToolRegistry, EmailOutboundTool,
+    ContentGeneratorTool, WebResearchTool, DeployHealthCheckTool,
+    LandingPageTool, default_tool_registry,
+)
+from orchestrator_agent.scheduler import (
+    WorkflowScheduler, ScheduleEntry, DigestReport,
+)
 
 __all__ = [
     "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
@@ -70,4 +78,10 @@ __all__ = [
     "TrustStore", "InMemoryTrustStore", "PostgresTrustStore",
     "create_trust_store",
     "WorkflowRunner", "WorkflowState", "Checkpointer",
+    # Tools
+    "Tool", "ToolResult", "ToolRegistry", "EmailOutboundTool",
+    "ContentGeneratorTool", "WebResearchTool", "DeployHealthCheckTool",
+    "LandingPageTool", "default_tool_registry",
+    # Scheduler
+    "WorkflowScheduler", "ScheduleEntry", "DigestReport",
 ]

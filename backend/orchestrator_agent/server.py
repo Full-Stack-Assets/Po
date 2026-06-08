@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator_agent.models import ExecutionMode
 from orchestrator_agent.orchestrator import OrchestratorAgent
+from orchestrator_agent.tools import default_tool_registry, ToolResult
+from orchestrator_agent.scheduler import WorkflowScheduler
 
 app = FastAPI(
     title="Constraint-Optimized LLM Agent Orchestrator",
@@ -31,15 +33,22 @@ app.add_middleware(
 )
 
 orchestrator = OrchestratorAgent()
+tool_registry = None
+scheduler = None
 
 
 @app.on_event("startup")
 async def startup():
+    global tool_registry, scheduler
     await orchestrator.initialize()
+    tool_registry = default_tool_registry(orchestrator.llm)
+    scheduler = WorkflowScheduler(orchestrator)
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    if scheduler:
+        await scheduler.stop()
     await orchestrator.shutdown()
 
 
@@ -83,6 +92,18 @@ class WorkflowPlanRequest(BaseModel):
 
 class WorkflowResumeRequest(BaseModel):
     conversation_id: Optional[str] = ""
+
+
+class ToolExecuteRequest(BaseModel):
+    tool: str
+    params: dict = {}
+
+
+class ScheduleRequest(BaseModel):
+    name: str
+    goal: str
+    interval_seconds: int = 3600
+    max_runs: Optional[int] = None
 
 
 @app.post("/v2/orchestrate")
@@ -189,3 +210,106 @@ async def health():
         "providers": orchestrator.llm.get_health(),
         "usage": orchestrator.llm.get_usage(),
     }
+
+
+# ── Tools ────────────────────────────────────────────────────────────
+
+@app.get("/v2/tools")
+async def list_tools():
+    """List available action tools."""
+    return {"tools": tool_registry.list_tools() if tool_registry else []}
+
+
+@app.post("/v2/tools/execute")
+async def execute_tool(req: ToolExecuteRequest):
+    """Execute an action tool by name."""
+    if not tool_registry:
+        return {"success": False, "error": "Tools not initialized"}
+    result = await tool_registry.execute(req.tool, req.params)
+    return {
+        "tool": result.tool,
+        "success": result.success,
+        "output": result.output,
+        "data": result.data,
+        "error": result.error,
+        "verify_actions": result.verify_actions,
+        "cost_usd": result.cost_usd,
+        "latency_ms": result.latency_ms,
+    }
+
+
+# ── Scheduler ────────────────────────────────────────────────────────
+
+@app.get("/v2/schedules")
+async def list_schedules():
+    """List scheduled workflows."""
+    return {"schedules": scheduler.list_schedules() if scheduler else []}
+
+
+@app.post("/v2/schedules")
+async def create_schedule(req: ScheduleRequest):
+    """Schedule a recurring workflow."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    entry = scheduler.schedule(
+        req.name, req.goal, req.interval_seconds, req.max_runs)
+    return entry.to_dict()
+
+
+@app.post("/v2/schedules/{schedule_id}/run")
+async def run_schedule_now(schedule_id: str):
+    """Trigger a scheduled workflow immediately."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    return await scheduler.run_immediate(schedule_id)
+
+
+@app.post("/v2/schedules/{schedule_id}/pause")
+async def pause_schedule(schedule_id: str):
+    """Pause a scheduled workflow."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    return {"paused": scheduler.pause(schedule_id)}
+
+
+@app.post("/v2/schedules/{schedule_id}/resume")
+async def resume_schedule(schedule_id: str):
+    """Resume a paused scheduled workflow."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    return {"resumed": scheduler.resume(schedule_id)}
+
+
+@app.delete("/v2/schedules/{schedule_id}")
+async def cancel_schedule(schedule_id: str):
+    """Cancel a scheduled workflow."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    return {"cancelled": scheduler.cancel(schedule_id)}
+
+
+@app.post("/v2/scheduler/start")
+async def start_scheduler():
+    """Start the background scheduler."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    await scheduler.start()
+    return {"status": "started", "schedules": len(scheduler.list_schedules())}
+
+
+@app.post("/v2/scheduler/stop")
+async def stop_scheduler():
+    """Stop the background scheduler."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    await scheduler.stop()
+    return {"status": "stopped"}
+
+
+@app.get("/v2/digest")
+async def digest(period_hours: int = 24):
+    """Generate a digest report of recent activity."""
+    if not scheduler:
+        return {"error": "Scheduler not initialized"}
+    report = await scheduler.generate_digest(period_hours)
+    return report.to_dict()
