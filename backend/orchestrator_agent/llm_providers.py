@@ -531,12 +531,16 @@ class GeminiProvider(BaseLLMProvider):
         model = model or self.config.default_model or "gemini-2.5-flash"
         start = time.time()
         try:
-            resp = await self._client.chat.completions.create(
+            create_kwargs: Dict[str, Any] = dict(
                 model=model,
                 messages=[m.to_dict() for m in messages],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                stop=stop,
+            )
+            if stop:
+                create_kwargs["stop"] = stop
+            resp = await self._client.chat.completions.create(
+                **create_kwargs,
                 **kwargs,
             )
             latency = (time.time() - start) * 1000
@@ -566,13 +570,17 @@ class GeminiProvider(BaseLLMProvider):
                                stop: Optional[List[str]] = None,
                                **kwargs) -> AsyncIterator[LLMChunk]:
         model = model or self.config.default_model or "gemini-2.5-flash"
-        stream = await self._client.chat.completions.create(
+        create_kwargs: Dict[str, Any] = dict(
             model=model,
             messages=[m.to_dict() for m in messages],
             temperature=temperature,
             max_tokens=max_tokens,
-            stop=stop,
             stream=True,
+        )
+        if stop:
+            create_kwargs["stop"] = stop
+        stream = await self._client.chat.completions.create(
+            **create_kwargs,
             **kwargs,
         )
         async for chunk in stream:
