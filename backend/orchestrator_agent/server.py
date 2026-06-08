@@ -6,10 +6,13 @@ Run: uvicorn orchestrator_agent.server:app --reload
 from __future__ import annotations
 from typing import Any, List, Optional
 import json
+import logging
+import os
+import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator_agent.models import ExecutionMode
@@ -17,20 +20,47 @@ from orchestrator_agent.orchestrator import OrchestratorAgent
 from orchestrator_agent.tools import default_tool_registry, ToolResult
 from orchestrator_agent.scheduler import WorkflowScheduler
 
+logger = logging.getLogger(__name__)
+
+PO_ENV = os.environ.get("PO_ENV", "development")
+PO_API_KEY = os.environ.get("PO_API_KEY", "")
+CORS_ORIGINS = os.environ.get("PO_CORS_ORIGINS", "*").split(",")
+
 app = FastAPI(
-    title="Constraint-Optimized LLM Agent Orchestrator",
-    description="Multi-provider agent orchestration API",
+    title="Po — AI Growth Operator API",
+    description="Multi-provider agent orchestration with trust layer",
     version="2.0.0",
+    docs_url="/docs" if PO_ENV != "production" else None,
+    redoc_url=None,
 )
 
-# Allow the static web dashboard (served from a different origin/port) to
-# call the API in development. Tighten allow_origins for production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def auth_and_logging(request: Request, call_next):
+    start = time.time()
+
+    if PO_API_KEY and request.url.path not in ("/v2/health", "/docs",
+                                                "/openapi.json"):
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+        if token != PO_API_KEY:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    response = await call_next(request)
+
+    if PO_ENV == "production":
+        ms = (time.time() - start) * 1000
+        logger.info(f"{request.method} {request.url.path} "
+                     f"{response.status_code} {ms:.0f}ms")
+
+    return response
+
 
 orchestrator = OrchestratorAgent()
 tool_registry = None
@@ -40,9 +70,13 @@ scheduler = None
 @app.on_event("startup")
 async def startup():
     global tool_registry, scheduler
+    if PO_ENV == "production":
+        logging.basicConfig(level=logging.INFO,
+                            format="%(asctime)s %(levelname)s %(message)s")
     await orchestrator.initialize()
     tool_registry = default_tool_registry(orchestrator.llm)
     scheduler = WorkflowScheduler(orchestrator)
+    logger.info(f"Po API ready (env={PO_ENV})")
 
 
 @app.on_event("shutdown")
