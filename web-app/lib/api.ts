@@ -185,6 +185,82 @@ export interface SchedulesResponse {
   schedules: any[];
 }
 
+export interface AnalyticsDashboard {
+  total_runs: number;
+  total_cost_usd: number;
+  total_tokens: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  active_providers: number;
+  pending_approvals: number;
+  cost_trend: Array<{timestamp: string; value: number; label?: string}>;
+  runs_trend: Array<{timestamp: string; value: number; label?: string}>;
+  cost_by_provider: Array<{provider: string; model: string; cost_usd: number; token_count: number; run_count: number}>;
+  cost_by_intent: Array<{provider: string; model: string; cost_usd: number; token_count: number; run_count: number}>;
+  provider_metrics: Array<{provider: string; total_requests: number; success_count: number; failure_count: number; avg_latency_ms: number; total_cost_usd: number; circuit_open: boolean}>;
+  top_intents: Array<[string, number]>;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  metadata: Record<string, any>;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    timestamp: string;
+    metadata: Record<string, any>;
+  }>;
+  metadata: Record<string, any>;
+}
+
+export interface ChatResponse {
+  user_message: { id: string; role: string; content: string; timestamp: string };
+  assistant_message: {
+    id: string;
+    role: string;
+    content: string;
+    timestamp: string;
+    metadata: Record<string, any>;
+  };
+  result: any;
+}
+
+export interface SystemConfigResponse {
+  providers: Array<{
+    provider: string;
+    enabled: boolean;
+    api_key_set: boolean;
+    default_model: string;
+    models_available: string[];
+    health: Record<string, any>;
+  }>;
+  constraints: Array<{
+    name: string;
+    current_used: number;
+    max_value: number;
+    unit: string;
+  }>;
+  trust: {
+    auto_approve: boolean;
+    live_signals: boolean;
+    fail_on_unverified: boolean;
+    approval_ttl_seconds: number;
+    validation_threshold: string;
+  };
+  tools: Array<{ name: string; description: string }>;
+  environment: string;
+}
+
 export interface ApiError {
   error: string;
   status: number;
@@ -255,6 +331,10 @@ class ApiClient {
 
   private post<T>(path: string, body?: unknown) {
     return this.request<T>("POST", path, body);
+  }
+
+  private put<T>(path: string, body?: unknown) {
+    return this.request<T>("PUT", path, body);
   }
 
   private del<T>(path: string) {
@@ -356,10 +436,78 @@ class ApiClient {
     return this.del<any>(`/v2/schedules/${id}`);
   }
 
+  // Analytics
+  getAnalyticsDashboard(periodHours = 24) {
+    return this.get<AnalyticsDashboard>(`/v2/analytics/dashboard?period_hours=${periodHours}`);
+  }
+
   // Digest
   getDigest(periodHours?: number) {
     const q = periodHours !== undefined ? `?period_hours=${periodHours}` : "";
     return this.get<any>(`/v2/digest${q}`);
+  }
+
+  // Conversations
+  createConversation(title?: string) {
+    return this.post<{ id: string; title: string; created_at: string }>(
+      "/v2/conversations",
+      title ? { title } : {},
+    );
+  }
+
+  listConversations(limit = 20, offset = 0) {
+    return this.get<{ conversations: ConversationSummary[] }>(
+      `/v2/conversations?limit=${limit}&offset=${offset}`,
+    );
+  }
+
+  getConversation(id: string) {
+    return this.get<ConversationDetail>(`/v2/conversations/${id}`);
+  }
+
+  sendMessage(id: string, content: string, validate?: boolean) {
+    return this.post<ChatResponse>(`/v2/conversations/${id}/messages`, {
+      content,
+      validate,
+    });
+  }
+
+  deleteConversation(id: string) {
+    return this.del<any>(`/v2/conversations/${id}`);
+  }
+
+  // Config
+  getConfig() {
+    return this.get<SystemConfigResponse>("/v2/config");
+  }
+
+  updateConstraints(body: { max_tokens?: number; max_cost?: number }) {
+    return this.put<any>("/v2/config/constraints", body);
+  }
+
+  updateTrust(body: {
+    auto_approve?: boolean;
+    live_signals?: boolean;
+    fail_on_unverified?: boolean;
+  }) {
+    return this.put<any>("/v2/config/trust", body);
+  }
+
+  testProvider(provider: string) {
+    return this.post<{
+      success: boolean;
+      latency_ms: number;
+      model: string;
+      error?: string;
+    }>(`/v2/config/providers/${provider}/test`);
+  }
+
+  resetProviderCircuit(provider: string) {
+    return this.post<any>(`/v2/config/providers/${provider}/reset`);
+  }
+
+  resetBudgets() {
+    return this.post<any>("/v2/config/budgets/reset");
   }
 }
 

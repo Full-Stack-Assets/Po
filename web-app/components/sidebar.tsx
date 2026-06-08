@@ -9,7 +9,7 @@ import {
   GitBranch,
   ShieldCheck,
   History,
-  Wrench,
+  Settings,
   Menu,
   X,
 } from "lucide-react";
@@ -21,6 +21,7 @@ const navItems = [
   { href: "/workflows", label: "Workflows", icon: GitBranch },
   { href: "/approvals", label: "Approvals", icon: ShieldCheck },
   { href: "/runs", label: "Runs", icon: History },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
