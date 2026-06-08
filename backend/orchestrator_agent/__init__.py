@@ -4,10 +4,10 @@ Constraint-Optimized LLM Agent Orchestration System
 Multi-provider agent orchestration framework with intelligent routing,
 constraint management, fallback chains, and streaming support.
 
-Providers: OpenAI, Anthropic, Azure OpenAI, Google Gemini, Mistral, Ollama
+Providers: OpenAI, Anthropic, Azure OpenAI, Google Gemini, Mistral, Ollama, OpenRouter
 """
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 __author__ = "Nicholas Albertson"
 
 from orchestrator_agent.models import (
@@ -55,6 +55,21 @@ from orchestrator_agent.tools import (
 from orchestrator_agent.scheduler import (
     WorkflowScheduler, ScheduleEntry, DigestReport,
 )
+from orchestrator_agent.auth import (
+    AuthManager, InMemoryUserStore, User, UserStore, Session,
+)
+from orchestrator_agent.conversations import (
+    InMemoryConversationStore, ConversationStore,
+    Conversation, ChatMessage, MessageRole,
+)
+from orchestrator_agent.analytics import (
+    AnalyticsEngine, DashboardMetrics, TimeSeriesPoint,
+    CostBreakdown, ProviderMetrics,
+)
+from orchestrator_agent.config_api import (
+    ConfigManager, SystemConfig, ProviderSetting,
+    ConstraintSetting, TrustSettings,
+)
 
 __all__ = [
     "OrchestratorAgent", "LLMManager", "FallbackChain", "ModelSelector",
@@ -84,4 +99,15 @@ __all__ = [
     "LandingPageTool", "default_tool_registry",
     # Scheduler
     "WorkflowScheduler", "ScheduleEntry", "DigestReport",
+    # Auth
+    "AuthManager", "InMemoryUserStore", "User", "UserStore", "Session",
+    # Conversations
+    "InMemoryConversationStore", "ConversationStore",
+    "Conversation", "ChatMessage", "MessageRole",
+    # Analytics
+    "AnalyticsEngine", "DashboardMetrics", "TimeSeriesPoint",
+    "CostBreakdown", "ProviderMetrics",
+    # Config
+    "ConfigManager", "SystemConfig", "ProviderSetting",
+    "ConstraintSetting", "TrustSettings",
 ]

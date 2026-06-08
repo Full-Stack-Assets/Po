@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 
-import pytest
 
 from orchestrator_agent.approvals import (
     ApprovalManager, ApprovalPolicy, ApprovalDecision, ApprovalType,

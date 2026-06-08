@@ -11,7 +11,7 @@ import pytest
 
 from orchestrator_agent.llm_providers import (
     BaseLLMProvider, ProviderConfig, ProviderType,
-    Message, LLMResponse, LLMChunk, TokenUsage, ModelInfo,
+    LLMResponse, LLMChunk, TokenUsage, ModelInfo,
 )
 from orchestrator_agent.orchestrator import OrchestratorAgent
 

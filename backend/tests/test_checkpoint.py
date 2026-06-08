@@ -3,7 +3,7 @@
 import pytest
 
 from orchestrator_agent.models import (
-    Task, TaskContext, AgentResult, AgentProfile, Constraint,
+    TaskContext, AgentResult, AgentProfile, Constraint,
 )
 from orchestrator_agent.orchestrator import ExecutionPipeline, ConstraintEngine
 from orchestrator_agent.approvals import ApprovalManager, ApprovalDecision

@@ -1,8 +1,7 @@
 """Unit tests for core data models."""
 
-import pytest
 from orchestrator_agent.models import (
-    Constraint, Task, TaskContext, TaskStatus, AgentCapability,
+    Constraint, Task, TaskContext, TaskStatus,
 )
 
 

@@ -1,6 +1,5 @@
 """Unit tests for intent classification."""
 
-import pytest
 from orchestrator_agent.orchestrator import IntentClassifier
 
 

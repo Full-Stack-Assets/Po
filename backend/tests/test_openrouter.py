@@ -1,6 +1,6 @@
 """Tests for the OpenRouter provider."""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from orchestrator_agent.llm_providers import (
     OpenRouterProvider, ProviderConfig, ProviderType, Message,
