@@ -116,5 +116,8 @@ cd web && python3 -m http.server 5173
 - ✅ **Auto-generated workflow plans** from `PlannerAgent`: a single high-level
   goal is decomposed into ordered sub-tasks with intent mapping, then executed
   through the checkpointed workflow runner. Endpoint `POST /v2/workflows/plan`.
-- **87/87 unit tests passing** (85 + 2 Postgres tests that run when
+- ✅ **End-to-end integration tests** through the real `OrchestratorAgent` with
+  a fake LLM provider: full orchestration, validation, plan→workflow, approval
+  gates, persistence, batch, and status/health paths exercised.
+- **95/95 tests passing** (93 + 2 Postgres tests that run when
   `DATABASE_URL` is set).

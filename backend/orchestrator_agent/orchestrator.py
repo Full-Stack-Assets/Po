@@ -763,7 +763,7 @@ class OrchestratorAgent:
         context = self._get_context(conversation_id)
         context.add_message("user", goal)
 
-        planner = self.registry.find_for_intent("plan")
+        planner = self.registry.find_for_intent("decompose")
         if not planner:
             raise RuntimeError("PlannerAgent not registered")
         plan_task = Task(input_text=goal, intent="plan")
