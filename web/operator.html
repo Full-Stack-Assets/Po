@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Po — Operator Console</title>
+    <meta name="description" content="Po operator console: workflows, approvals, reliability metrics, cost tracking." />
+    <style>
+      :root {
+        --bg: #0a0a0f; --panel: #14141c; --panel2: #1a1a26;
+        --border: #26263340; --text: #e5e7eb; --muted: #9ca3af;
+        --accent: #c084fc; --accent2: #8b5cf6;
+        --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      html, body {
+        background: var(--bg); color: var(--text);
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        line-height: 1.5; min-height: 100vh;
+      }
+      a { color: var(--accent); text-decoration: none; }
+
+      /* ── Layout ── */
+      .shell { display: flex; min-height: 100vh; }
+      .sidebar {
+        width: 220px; background: var(--panel); border-right: 1px solid var(--border);
+        padding: 20px 16px; display: flex; flex-direction: column; gap: 6px;
+        flex-shrink: 0;
+      }
+      .sidebar h1 { font-size: 20px; font-weight: 800; margin-bottom: 18px; }
+      .sidebar .nav-btn {
+        display: block; width: 100%; text-align: left; background: none;
+        border: none; color: var(--muted); padding: 8px 12px; border-radius: 8px;
+        cursor: pointer; font-size: 14px; transition: background 0.15s;
+      }
+      .sidebar .nav-btn:hover, .sidebar .nav-btn.active {
+        background: var(--panel2); color: var(--text);
+      }
+      .sidebar .nav-btn.active { border-left: 3px solid var(--accent); }
+      .main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+      .page { display: none; }
+      .page.active { display: block; }
+
+      /* ── Connect bar ── */
+      .conn-bar {
+        display: flex; gap: 10px; align-items: center; margin-bottom: 24px;
+        flex-wrap: wrap;
+      }
+      input[type="text"] {
+        background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+        border-radius: 8px; padding: 8px 14px; min-width: 260px; font-size: 14px;
+      }
+      button {
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
+        color: #0a0a0f; border: 0; border-radius: 8px; padding: 8px 16px;
+        font-weight: 700; cursor: pointer; font-size: 14px;
+      }
+      button.ghost { background: var(--panel); color: var(--text);
+        border: 1px solid var(--border); }
+      button.approve-btn { background: #11271f; color: var(--green);
+        border: 1px solid #34d39940; }
+      button.reject-btn { background: #2a1620; color: var(--red);
+        border: 1px solid #f8717140; }
+      .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px;
+        border: 1px solid var(--border); }
+      .badge.ok { color: var(--green); border-color: #34d39940; }
+      .badge.bad { color: var(--red); border-color: #f8717140; }
+
+      /* ── Cards ── */
+      .grid { display: grid; gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+      .card { background: var(--panel); border: 1px solid var(--border);
+        border-radius: 14px; padding: 18px; }
+      .card h2 { font-size: 13px; text-transform: uppercase;
+        letter-spacing: 0.08em; color: var(--muted); margin-bottom: 14px; }
+      .card.full { grid-column: 1 / -1; }
+
+      /* ── Stats ── */
+      .kpis { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 20px; }
+      .kpi { min-width: 110px; }
+      .kpi .num { font-size: 28px; font-weight: 800; }
+      .kpi .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase;
+        letter-spacing: 0.05em; }
+      .kpi .num.green { color: var(--green); }
+      .kpi .num.red { color: var(--red); }
+      .kpi .num.yellow { color: var(--yellow); }
+
+      /* ── Tables ── */
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      td, th { text-align: left; padding: 8px 6px;
+        border-bottom: 1px solid var(--border); }
+      th { color: var(--muted); font-weight: 600; }
+
+      /* ── Bars ── */
+      .bar { height: 6px; border-radius: 999px; background: #2a2a38;
+        overflow: hidden; margin-top: 4px; }
+      .bar > span { display: block; height: 100%;
+        background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+      .bar.green > span { background: var(--green); }
+      .bar.red > span { background: var(--red); }
+
+      /* ── Approvals ── */
+      .approval-card { border: 1px solid var(--border); border-radius: 10px;
+        padding: 14px; margin-bottom: 12px; background: var(--panel2); }
+      .approval-card .top { display: flex; justify-content: space-between;
+        align-items: center; margin-bottom: 8px; }
+      .approval-card .actions { display: flex; gap: 8px; margin-top: 10px; }
+
+      /* ── Timeline ── */
+      .timeline { position: relative; padding-left: 28px; }
+      .timeline::before { content: ""; position: absolute; left: 8px; top: 0;
+        bottom: 0; width: 2px; background: var(--border); }
+      .tl-item { position: relative; margin-bottom: 16px; }
+      .tl-item .dot { position: absolute; left: -24px; top: 4px; width: 12px;
+        height: 12px; border-radius: 50%; border: 2px solid var(--panel); }
+      .tl-item .dot.ok { background: var(--green); }
+      .tl-item .dot.fail { background: var(--red); }
+      .tl-item .dot.wait { background: var(--yellow); }
+      .tl-item .dot.run { background: var(--blue); }
+      .tl-item .meta { font-size: 12px; color: var(--muted); }
+
+      /* ── Orchestrate form ── */
+      .orch-form { display: flex; gap: 10px; margin-bottom: 20px; }
+      .orch-form input { flex: 1; }
+      .orch-output { background: var(--panel2); border-radius: 10px; padding: 16px;
+        white-space: pre-wrap; font-size: 13px; min-height: 60px; }
+
+      .muted { color: var(--muted); font-size: 13px; }
+      .err { color: var(--red); font-size: 13px; margin-top: 8px; }
+
+      /* ── Cost chart (simple CSS bars) ── */
+      .cost-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+      .cost-bar { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0;
+        min-width: 8px; position: relative; }
+      .cost-bar .tip { position: absolute; top: -18px; left: 50%;
+        transform: translateX(-50%); font-size: 10px; color: var(--muted);
+        white-space: nowrap; display: none; }
+      .cost-bar:hover .tip { display: block; }
+
+      /* ── Mobile ── */
+      @media (max-width: 768px) {
+        .sidebar { display: none; }
+        .main { padding: 16px; }
+        .mob-nav { display: flex !important; gap: 6px; overflow-x: auto;
+          padding-bottom: 12px; }
+        .mob-nav .nav-btn { flex-shrink: 0; background: var(--panel);
+          border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px;
+          color: var(--muted); cursor: pointer; font-size: 13px; }
+        .mob-nav .nav-btn.active { color: var(--accent);
+          border-color: var(--accent); }
+      }
+      .mob-nav { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="sidebar">
+        <h1>Po</h1>
+        <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+        <button class="nav-btn" data-page="approvals">Approvals</button>
+        <button class="nav-btn" data-page="workflows">Workflows</button>
+        <button class="nav-btn" data-page="runs">Run History</button>
+        <button class="nav-btn" data-page="orchestrate">Orchestrate</button>
+        <div style="flex:1"></div>
+        <a href="./live.html" style="font-size:13px;color:var(--muted)">Legacy console</a>
+        <a href="./index.html" style="font-size:13px;color:var(--muted)">Home</a>
+      </nav>
+
+      <div class="main">
+        <div class="mob-nav">
+          <button class="nav-btn active" data-page="dashboard">Dashboard</button>
+          <button class="nav-btn" data-page="approvals">Approvals</button>
+          <button class="nav-btn" data-page="workflows">Workflows</button>
+          <button class="nav-btn" data-page="runs">Runs</button>
+          <button class="nav-btn" data-page="orchestrate">Run</button>
+        </div>
+
+        <div class="conn-bar">
+          <input id="baseUrl" type="text" placeholder="http://localhost:8000" />
+          <button id="connect">Connect</button>
+          <span id="health" class="badge">disconnected</span>
+        </div>
+
+        <!-- ══ Dashboard ══ -->
+        <div id="p-dashboard" class="page active">
+          <div id="kpis" class="kpis"></div>
+          <div class="grid">
+            <div class="card">
+              <h2>Constraints</h2>
+              <div id="constraints"></div>
+            </div>
+            <div class="card">
+              <h2>Provider Health</h2>
+              <div id="providers"></div>
+            </div>
+            <div class="card">
+              <h2>Cost (recent runs)</h2>
+              <div id="cost-chart" class="cost-bars"></div>
+            </div>
+            <div class="card">
+              <h2>Agents</h2>
+              <div id="agents"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ Approvals ══ -->
+        <div id="p-approvals" class="page">
+          <h2 style="margin-bottom:16px">Pending Approvals</h2>
+          <div id="approval-list"></div>
+        </div>
+
+        <!-- ══ Workflows ══ -->
+        <div id="p-workflows" class="page">
+          <h2 style="margin-bottom:16px">Workflow Timeline</h2>
+          <div class="orch-form">
+            <input id="wf-goal" type="text" placeholder="Describe a goal to plan & execute..." />
+            <button id="wf-run">Plan & Run</button>
+          </div>
+          <div id="wf-timeline" class="timeline"></div>
+          <div id="wf-output" class="orch-output muted">Submit a goal above to start a workflow.</div>
+        </div>
+
+        <!-- ══ Run History ══ -->
+        <div id="p-runs" class="page">
+          <h2 style="margin-bottom:16px">Recent Runs</h2>
+          <div id="runs-table"></div>
+        </div>
+
+        <!-- ══ Orchestrate ══ -->
+        <div id="p-orchestrate" class="page">
+          <h2 style="margin-bottom:16px">Single Task</h2>
+          <div class="orch-form">
+            <input id="orch-input" type="text" placeholder="Enter a task..." />
+            <button id="orch-send">Send</button>
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)">
+              <input id="orch-validate" type="checkbox" /> Validate
+            </label>
+          </div>
+          <div id="orch-result" class="orch-output muted">Response will appear here.</div>
+        </div>
+
+        <p class="err" id="error"></p>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      "use strict";
+      var POLL = 4000, timer = null, base = "";
+      var $ = function (id) { return document.getElementById(id); };
+      var esc = function (s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+          return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+        });
+      };
+
+      /* ── Navigation ── */
+      document.querySelectorAll(".nav-btn[data-page]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          document.querySelectorAll(".nav-btn").forEach(function (b) { b.classList.remove("active"); });
+          document.querySelectorAll("[data-page='"+btn.dataset.page+"']").forEach(function (b) { b.classList.add("active"); });
+          document.querySelectorAll(".page").forEach(function (p) { p.classList.remove("active"); });
+          $("p-" + btn.dataset.page).classList.add("active");
+        });
+      });
+
+      function setHealth(ok, text) {
+        var el = $("health");
+        el.className = "badge " + (ok ? "ok" : "bad");
+        el.textContent = text;
+      }
+      function showError(msg) { $("error").textContent = msg || ""; }
+
+      async function api(path, opts) {
+        var res = await fetch(base + path, opts);
+        if (!res.ok) throw new Error(path + " → HTTP " + res.status);
+        return res.json();
+      }
+
+      function pct(x) { return (Math.round((x || 0) * 1000) / 10) + "%"; }
+
+      /* ── KPIs ── */
+      function renderKPIs(stats, usage) {
+        var el = $("kpis");
+        if (!stats || stats.persistence === "disabled") {
+          el.innerHTML = '<div class="kpi"><div class="num">—</div><div class="lbl">Connect backend</div></div>';
+          return;
+        }
+        var items = [
+          { num: stats.total_runs || 0, lbl: "Total Runs", cls: "" },
+          { num: pct(stats.success_rate), lbl: "Success Rate",
+            cls: (stats.success_rate||0) >= 0.9 ? "green" : (stats.success_rate||0) >= 0.7 ? "yellow" : "red" },
+          { num: stats.verified_runs || 0, lbl: "Verified", cls: "green" },
+          { num: stats.approvals_pending || 0, lbl: "Pending Approvals",
+            cls: (stats.approvals_pending||0) > 0 ? "yellow" : "" },
+          { num: "$" + ((usage && usage.total_cost_usd) || 0).toFixed(4), lbl: "Session Cost", cls: "" },
+        ];
+        el.innerHTML = items.map(function (i) {
+          return '<div class="kpi"><div class="num ' + i.cls + '">' +
+            esc(i.num) + '</div><div class="lbl">' + esc(i.lbl) + '</div></div>';
+        }).join("");
+      }
+
+      /* ── Constraints ── */
+      function renderConstraints(list) {
+        var el = $("constraints");
+        if (!list || !list.length) { el.innerHTML = '<p class="muted">—</p>'; return; }
+        el.innerHTML = list.map(function (c) {
+          var w = parseFloat(c.utilization) || 0;
+          var cls = w > 85 ? "red" : w > 60 ? "" : "green";
+          var unit = c.unit === "USD" ? "$" + Number(c.used).toFixed(4) + " / $" + Number(c.max).toFixed(2) :
+            Math.round(c.used).toLocaleString() + " / " + Math.round(c.max).toLocaleString() + " " + esc(c.unit);
+          return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between">' +
+            '<span>' + esc(c.name.replace(/_/g," ")) + '</span><span class="muted">' + unit + '</span></div>' +
+            '<div class="bar ' + cls + '"><span style="width:' + Math.min(100,w) + '%"></span></div></div>';
+        }).join("");
+      }
+
+      /* ── Providers ── */
+      function renderProviders(list) {
+        var el = $("providers");
+        if (!list || !list.length) { el.innerHTML = '<p class="muted">none</p>'; return; }
+        el.innerHTML = "<table><tr><th>Provider</th><th>Rate</th><th>Latency</th><th></th></tr>" +
+          list.map(function (p) {
+            return "<tr><td>" + esc(p.provider) + "</td><td>" + esc(p.success_rate) +
+              "</td><td>" + esc(p.avg_latency_ms) + "ms</td><td>" +
+              (p.circuit_open ? '<span style="color:var(--red)">down</span>' :
+                '<span style="color:var(--green)">ok</span>') + "</td></tr>";
+          }).join("") + "</table>";
+      }
+
+      /* ── Agents ── */
+      function renderAgents(list) {
+        var el = $("agents");
+        if (!list || !list.length) { el.innerHTML = '<p class="muted">—</p>'; return; }
+        el.innerHTML = "<table><tr><th>Agent</th><th>Intents</th><th>Active</th></tr>" +
+          list.map(function (a) {
+            return "<tr><td>" + esc(a.name) + "</td><td class='muted'>" +
+              esc((a.intents||[]).slice(0,3).join(", ")) + "</td><td>" +
+              esc(a.active) + "</td></tr>";
+          }).join("") + "</table>";
+      }
+
+      /* ── Cost chart ── */
+      var runHistory = [];
+      function renderCostChart(runs) {
+        var el = $("cost-chart");
+        var recent = (runs || []).slice(0, 20).reverse();
+        if (!recent.length) { el.innerHTML = '<p class="muted">No runs yet</p>'; return; }
+        var max = Math.max.apply(null, recent.map(function (r) { return r.cost_usd || 0; })) || 0.001;
+        el.innerHTML = recent.map(function (r) {
+          var h = Math.max(4, ((r.cost_usd || 0) / max) * 72);
+          return '<div class="cost-bar" style="height:' + h + 'px"><span class="tip">$' +
+            (r.cost_usd || 0).toFixed(4) + ' ' + esc(r.intent || "") + '</span></div>';
+        }).join("");
+      }
+
+      /* ── Approvals ── */
+      function renderApprovals(list) {
+        var el = $("approval-list");
+        if (!list || !list.length) {
+          el.innerHTML = '<p class="muted">No pending approvals. Risky actions appear here.</p>';
+          return;
+        }
+        el.innerHTML = list.map(function (a) {
+          var inp = (a.payload && a.payload.input) || a.summary || "";
+          return '<div class="approval-card"><div class="top"><strong>' + esc(a.type) +
+            '</strong><span class="badge">' + esc(a.approval_id) + '</span></div>' +
+            '<div class="muted">' + esc(inp) + '</div>' +
+            '<div class="actions"><button class="approve-btn" onclick="poApprove(\'' +
+            esc(a.approval_id) + '\',true)">Approve</button>' +
+            '<button class="reject-btn" onclick="poApprove(\'' +
+            esc(a.approval_id) + '\',false)">Reject</button></div></div>';
+        }).join("");
+      }
+
+      window.poApprove = async function (id, approved) {
+        showError("");
+        try {
+          await api("/v2/approvals/" + encodeURIComponent(id), {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({approved: approved}),
+          });
+          await refresh();
+        } catch (e) { showError(String(e)); }
+      };
+
+      /* ── Runs table ── */
+      function renderRuns(runs) {
+        var el = $("runs-table");
+        if (!runs || !runs.length) { el.innerHTML = '<p class="muted">No runs recorded.</p>'; return; }
+        el.innerHTML = '<table><tr><th></th><th>Intent</th><th>Provider</th><th>Cost</th><th>Output</th></tr>' +
+          runs.slice(0, 50).map(function (r) {
+            var icon = r.success ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>';
+            return '<tr><td>' + icon + '</td><td>' + esc(r.intent) + '</td><td class="muted">' +
+              esc(r.provider || r.model || "") + '</td><td>$' + (r.cost_usd||0).toFixed(4) +
+              '</td><td class="muted">' + esc((r.output||"").slice(0,80)) + '</td></tr>';
+          }).join("") + '</table>';
+      }
+
+      /* ── Orchestrate ── */
+      $("orch-send").addEventListener("click", async function () {
+        var input = $("orch-input").value.trim();
+        if (!input) return;
+        $("orch-result").textContent = "Running...";
+        $("orch-result").className = "orch-output muted";
+        try {
+          var validate = $("orch-validate").checked;
+          var result = await api("/v2/orchestrate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({input: input, validate: validate}),
+          });
+          var lines = [];
+          lines.push((result.success ? "✓" : "✗") + " " + (result.intent||"") +
+            " via " + (result.provider_used||"") + "/" + (result.model_used||""));
+          lines.push("tokens=" + (result.tokens_used||0) + "  cost=$" + (result.cost_usd||0).toFixed(4));
+          if (result.validation) {
+            lines.push("Validation: " + result.validation.score + " (" + result.validation.overall_score + "/100)");
+          }
+          lines.push("");
+          lines.push(result.output || result.error || "");
+          $("orch-result").textContent = lines.join("\n");
+          $("orch-result").className = "orch-output";
+          await refresh();
+        } catch (e) {
+          $("orch-result").textContent = "Error: " + e;
+          $("orch-result").className = "orch-output";
+        }
+      });
+      $("orch-input").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") $("orch-send").click();
+      });
+
+      /* ── Workflow ── */
+      $("wf-run").addEventListener("click", async function () {
+        var goal = $("wf-goal").value.trim();
+        if (!goal) return;
+        $("wf-output").textContent = "Planning & executing...";
+        $("wf-timeline").innerHTML = "";
+        try {
+          var result = await api("/v2/workflows/plan", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({goal: goal}),
+          });
+          var tl = $("wf-timeline");
+          (result.results || []).forEach(function (s, i) {
+            var cls = s.success ? "ok" : "fail";
+            tl.innerHTML += '<div class="tl-item"><div class="dot ' + cls + '"></div>' +
+              '<div><strong>Step ' + (i+1) + '</strong> [' + esc(s.intent) + '] $' +
+              (s.cost_usd||0).toFixed(4) + '<div class="meta">' +
+              esc((s.output||"").slice(0,120)) + '</div></div></div>';
+          });
+          $("wf-output").textContent = "Status: " + (result.status||"?") +
+            (result.plan_raw ? "\n\nPlan:\n" + result.plan_raw.slice(0,300) : "");
+          await refresh();
+        } catch (e) {
+          $("wf-output").textContent = "Error: " + e;
+        }
+      });
+
+      /* ── Poll loop ── */
+      async function refresh() {
+        try {
+          var status = await api("/v2/status");
+          setHealth(true, "connected");
+          renderConstraints(status.constraints);
+          renderProviders(status.providers);
+          renderAgents(status.agents);
+
+          var stats = {}; try { stats = await api("/v2/stats"); } catch (e) {}
+          renderKPIs(stats, status.usage);
+
+          var ap = []; try { ap = (await api("/v2/approvals")).approvals || []; } catch (e) {}
+          renderApprovals(ap);
+
+          var runs = []; try { runs = (await api("/v2/runs?limit=50")).runs || []; } catch (e) {}
+          runHistory = runs;
+          renderCostChart(runs);
+          renderRuns(runs);
+          showError("");
+        } catch (e) {
+          setHealth(false, "error");
+          showError(String(e) + " — is the backend running?");
+        }
+      }
+
+      function connect() {
+        base = ($("baseUrl").value || "http://localhost:8000").replace(/\/+$/, "");
+        try { localStorage.setItem("po.baseUrl", base); } catch (e) {}
+        if (timer) clearInterval(timer);
+        refresh();
+        timer = setInterval(refresh, POLL);
+      }
+
+      window.addEventListener("DOMContentLoaded", function () {
+        var saved = ""; try { saved = localStorage.getItem("po.baseUrl") || ""; } catch (e) {}
+        $("baseUrl").value = saved || "http://localhost:8000";
+        $("connect").addEventListener("click", connect);
+        $("baseUrl").addEventListener("keydown", function (e) { if (e.key === "Enter") connect(); });
+      });
+    })();
+    </script>
+  </body>
+</html>

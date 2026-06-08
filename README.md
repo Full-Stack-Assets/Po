@@ -119,5 +119,20 @@ cd web && python3 -m http.server 5173
 - ✅ **End-to-end integration tests** through the real `OrchestratorAgent` with
   a fake LLM provider: full orchestration, validation, plan→workflow, approval
   gates, persistence, batch, and status/health paths exercised.
-- **95/95 tests passing** (93 + 2 Postgres tests that run when
+- ✅ **Action tools layer** (`tools.py`): executable tools agents can invoke —
+  email outbound (Resend API), content generation (LLM), web research, deploy
+  health check, landing page generator + deployer. Each tool returns
+  `verify_actions` specs for the verification layer. `ToolRegistry` + 5
+  endpoints (`/v2/tools`, `/v2/tools/execute`).
+- ✅ **Interactive CLI** (`python -m orchestrator_agent`): rich terminal
+  experience with color-coded output, constraint budget bars, validation/
+  verification/approval display, workflow planning, and live cost tracking.
+- ✅ **Operator console** (`web/operator.html`): full-featured dashboard with
+  sidebar navigation, KPI cards, constraint gauges, cost chart, provider health,
+  approval queue, workflow timeline, run history table, and single-task
+  orchestration — mobile-responsive.
+- ✅ **Workflow scheduler** (`scheduler.py`): cron-like recurring workflows,
+  one-shot delayed execution, pause/resume, morning digest reports with verified
+  metrics. Endpoints: `/v2/schedules`, `/v2/scheduler/start|stop`, `/v2/digest`.
+- **129/131 tests passing** (129 + 2 Postgres tests that run when
   `DATABASE_URL` is set).

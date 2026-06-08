@@ -228,6 +228,63 @@ state = await orch.plan_and_run_workflow("Grow my B2B SaaS to 100 users")
 # checkpointed runner executes them — pausing for approval on risky steps.
 ```
 
+### Action Tools (`tools.py`)
+
+Executable tools that agents can invoke to perform real side-effecting actions.
+Each returns structured results with `verify_actions` specs so the verification
+layer can independently confirm the tool's work.
+
+| Tool | What it does |
+|------|-------------|
+| `send_email` | Send transactional/outreach email via Resend API |
+| `generate_content` | Generate blog posts, email copy, landing pages via LLM |
+| `web_research` | Fetch and extract text content from web pages |
+| `check_deploy` | Verify a deployed URL returns 200 + expected content |
+| `landing_page` | Generate a landing page via LLM and optionally deploy it |
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v2/tools` | List available tools |
+| POST | `/v2/tools/execute` | Execute a tool `{tool, params}` |
+
+```python
+from orchestrator_agent import default_tool_registry
+registry = default_tool_registry(orch.llm)
+result = await registry.execute("send_email", {
+    "to": "founder@startup.com",
+    "subject": "Quick question about your stack",
+    "body": "<p>Hi...</p>",
+})
+# result.verify_actions → [{"type": "email_deliverability", "domain": "startup.com"}]
+```
+
+### Workflow Scheduler (`scheduler.py`)
+
+Cron-like scheduler that runs workflows on a recurring basis and generates
+verified digest reports.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v2/schedules` | List scheduled workflows |
+| POST | `/v2/schedules` | Create a schedule `{name, goal, interval_seconds}` |
+| POST | `/v2/schedules/{id}/run` | Trigger immediately |
+| POST | `/v2/schedules/{id}/pause` | Pause |
+| POST | `/v2/schedules/{id}/resume` | Resume |
+| DELETE | `/v2/schedules/{id}` | Cancel |
+| POST | `/v2/scheduler/start` | Start background scheduler |
+| POST | `/v2/scheduler/stop` | Stop background scheduler |
+| GET | `/v2/digest?period_hours=24` | Generate a digest report |
+
+```python
+from orchestrator_agent import WorkflowScheduler
+sched = WorkflowScheduler(orch)
+sched.schedule("daily research", "Research AI trends", interval_seconds=86400)
+await sched.start()
+# ... later ...
+digest = await sched.generate_digest(period_hours=24)
+print(digest.summary_text())
+```
+
 ### Live web console
 
 `web/live.html` is a zero-build operator console that connects to this API
@@ -307,7 +364,9 @@ orchestrator_agent/
 ├── llm_manager.py       # Multi-provider coordinator
 ├── agents.py            # 6 wired sub-agents
 ├── orchestrator.py      # Main orchestrator + pipeline
-└── server.py            # FastAPI REST API
+├── server.py            # FastAPI REST API
+├── tools.py             # Action tools (email, content, deploy, research)
+└── scheduler.py         # Cron-like workflow scheduler + digest reports
 ```
 
 ## Key Features
