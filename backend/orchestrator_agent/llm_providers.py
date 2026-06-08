@@ -24,6 +24,7 @@ class ProviderType(Enum):
     GEMINI = "gemini"
     MISTRAL = "mistral"
     OLLAMA = "ollama"
+    OPENROUTER = "openrouter"
 
 
 @dataclass
@@ -134,6 +135,17 @@ MODEL_COSTS: Dict[str, Tuple[float, float]] = {
     # DeepSeek (OpenAI-compatible)
     "deepseek-chat":         (0.00014, 0.00028),
     "deepseek-reasoner":     (0.00055, 0.00219),
+    # OpenRouter (prices vary by underlying model, these are approximate)
+    "openrouter/auto":                  (0.001, 0.004),
+    "openai/gpt-4.1-mini":             (0.0004, 0.0016),
+    "openai/gpt-4.1":                  (0.002, 0.008),
+    "openai/gpt-4o":                   (0.0025, 0.010),
+    "anthropic/claude-sonnet-4-5":     (0.003, 0.015),
+    "anthropic/claude-haiku-3.5":      (0.0008, 0.004),
+    "google/gemini-2.5-flash":         (0.00015, 0.0006),
+    "google/gemini-2.5-pro":           (0.00125, 0.010),
+    "meta-llama/llama-4-maverick":     (0.0002, 0.0008),
+    "deepseek/deepseek-chat-v3":       (0.00014, 0.00028),
     # Ollama (local — zero cost)
     "llama3":                (0.0, 0.0),
     "codellama":             (0.0, 0.0),
@@ -531,12 +543,16 @@ class GeminiProvider(BaseLLMProvider):
         model = model or self.config.default_model or "gemini-2.5-flash"
         start = time.time()
         try:
-            resp = await self._client.chat.completions.create(
+            create_kwargs: Dict[str, Any] = dict(
                 model=model,
                 messages=[m.to_dict() for m in messages],
                 temperature=temperature,
                 max_tokens=max_tokens,
-                stop=stop,
+            )
+            if stop:
+                create_kwargs["stop"] = stop
+            resp = await self._client.chat.completions.create(
+                **create_kwargs,
                 **kwargs,
             )
             latency = (time.time() - start) * 1000
@@ -566,13 +582,17 @@ class GeminiProvider(BaseLLMProvider):
                                stop: Optional[List[str]] = None,
                                **kwargs) -> AsyncIterator[LLMChunk]:
         model = model or self.config.default_model or "gemini-2.5-flash"
-        stream = await self._client.chat.completions.create(
+        create_kwargs: Dict[str, Any] = dict(
             model=model,
             messages=[m.to_dict() for m in messages],
             temperature=temperature,
             max_tokens=max_tokens,
-            stop=stop,
             stream=True,
+        )
+        if stop:
+            create_kwargs["stop"] = stop
+        stream = await self._client.chat.completions.create(
+            **create_kwargs,
             **kwargs,
         )
         async for chunk in stream:
@@ -791,6 +811,130 @@ class OllamaProvider(BaseLLMProvider):
             await self._session.close()
 
 
+# ── OpenRouter Provider ───────────────────────────────────────────────
+
+class OpenRouterProvider(BaseLLMProvider):
+    """Provider for OpenRouter — unified gateway to 200+ models."""
+
+    OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+    async def initialize(self) -> None:
+        from openai import AsyncOpenAI
+        self._client = AsyncOpenAI(
+            api_key=self.config.api_key,
+            base_url=self.config.base_url or self.OPENROUTER_BASE_URL,
+            timeout=self.config.timeout_seconds,
+            max_retries=self.config.max_retries,
+            default_headers=self._extra_headers(),
+        )
+        logger.info("OpenRouter provider initialized")
+
+    def _extra_headers(self) -> Dict[str, str]:
+        headers: Dict[str, str] = {}
+        referer = self.config.extra.get("referer", "")
+        title = self.config.extra.get("title", "Po AI Operator")
+        if referer:
+            headers["HTTP-Referer"] = referer
+        if title:
+            headers["X-OpenRouter-Title"] = title
+        return headers
+
+    async def complete(self, messages: List[Message], model: Optional[str] = None,
+                       temperature: float = 0.7, max_tokens: int = 4096,
+                       stop: Optional[List[str]] = None, **kwargs) -> LLMResponse:
+        model = model or self.config.default_model or "openai/gpt-4.1-mini"
+        start = time.time()
+        try:
+            create_kwargs: Dict[str, Any] = dict(
+                model=model,
+                messages=[m.to_dict() for m in messages],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
+            )
+            if stop:
+                create_kwargs["stop"] = stop
+            resp = await self._client.chat.completions.create(**create_kwargs)
+            latency = (time.time() - start) * 1000
+            usage = self.estimate_cost(
+                model,
+                resp.usage.prompt_tokens if resp.usage else 0,
+                resp.usage.completion_tokens if resp.usage else 0,
+            )
+            return LLMResponse(
+                content=resp.choices[0].message.content or "",
+                model=model,
+                provider=ProviderType.OPENROUTER,
+                usage=usage,
+                finish_reason=resp.choices[0].finish_reason or "",
+                latency_ms=latency,
+            )
+        except Exception as e:
+            return LLMResponse(
+                content="", model=model, provider=ProviderType.OPENROUTER,
+                success=False, error=str(e),
+                latency_ms=(time.time() - start) * 1000,
+            )
+
+    async def stream_complete(self, messages: List[Message],
+                               model: Optional[str] = None,
+                               temperature: float = 0.7,
+                               max_tokens: int = 4096,
+                               stop: Optional[List[str]] = None,
+                               **kwargs) -> AsyncIterator[LLMChunk]:
+        model = model or self.config.default_model or "openai/gpt-4.1-mini"
+        create_kwargs: Dict[str, Any] = dict(
+            model=model,
+            messages=[m.to_dict() for m in messages],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            **kwargs,
+        )
+        if stop:
+            create_kwargs["stop"] = stop
+        stream = await self._client.chat.completions.create(**create_kwargs)
+        async for chunk in stream:
+            delta = chunk.choices[0].delta
+            yield LLMChunk(
+                content=delta.content or "",
+                finish_reason=chunk.choices[0].finish_reason,
+                model=model,
+            )
+
+    def get_available_models(self) -> List[ModelInfo]:
+        return [
+            ModelInfo("openai/gpt-4.1-mini", ProviderType.OPENROUTER,
+                      "GPT-4.1 Mini (via OpenRouter)",
+                      1_047_576, 32_768, 0.0004, 0.0016, True, True, True,
+                      ["research", "writing", "code", "analysis"]),
+            ModelInfo("openai/gpt-4.1", ProviderType.OPENROUTER,
+                      "GPT-4.1 (via OpenRouter)",
+                      1_047_576, 32_768, 0.002, 0.008, True, True, True,
+                      ["research", "writing", "code", "analysis"]),
+            ModelInfo("anthropic/claude-sonnet-4-5", ProviderType.OPENROUTER,
+                      "Claude Sonnet 4.5 (via OpenRouter)",
+                      200_000, 8_192, 0.003, 0.015, True, True, True,
+                      ["writing", "code", "analysis", "research"]),
+            ModelInfo("google/gemini-2.5-flash", ProviderType.OPENROUTER,
+                      "Gemini 2.5 Flash (via OpenRouter)",
+                      1_048_576, 8_192, 0.00015, 0.0006, True, True, True,
+                      ["summarization", "classification", "fast"]),
+            ModelInfo("meta-llama/llama-4-maverick", ProviderType.OPENROUTER,
+                      "Llama 4 Maverick (via OpenRouter)",
+                      1_048_576, 8_192, 0.0002, 0.0008, True, False, False,
+                      ["research", "writing", "analysis"]),
+            ModelInfo("deepseek/deepseek-chat-v3", ProviderType.OPENROUTER,
+                      "DeepSeek V3 (via OpenRouter)",
+                      128_000, 8_192, 0.00014, 0.00028, True, False, False,
+                      ["code", "research", "analysis"]),
+        ]
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.close()
+
+
 # ── Provider Factory ──────────────────────────────────────────────────
 
 PROVIDER_MAP = {
@@ -800,6 +944,7 @@ PROVIDER_MAP = {
     ProviderType.GEMINI:       GeminiProvider,
     ProviderType.MISTRAL:      MistralProvider,
     ProviderType.OLLAMA:       OllamaProvider,
+    ProviderType.OPENROUTER:   OpenRouterProvider,
 }
 
 
