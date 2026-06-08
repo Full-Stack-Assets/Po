@@ -6,10 +6,8 @@ Usage: python -m orchestrator_agent
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
-import time
 
 from orchestrator_agent.orchestrator import OrchestratorAgent
 
@@ -195,7 +193,7 @@ async def main():
         await orch.initialize()
     except RuntimeError as e:
         print(f"\n  {C.RED}Error: {e}{C.RESET}")
-        print(f"\n  Set at least one provider API key in the environment.")
+        print("\n  Set at least one provider API key in the environment.")
         print(f"  See {C.CYAN}backend/.env.example{C.RESET} for options.\n")
         sys.exit(1)
 

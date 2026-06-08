@@ -10,14 +10,14 @@ import logging
 import os
 import time
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from orchestrator_agent.models import ExecutionMode
 from orchestrator_agent.orchestrator import OrchestratorAgent
-from orchestrator_agent.tools import default_tool_registry, ToolResult
+from orchestrator_agent.tools import default_tool_registry
 from orchestrator_agent.scheduler import WorkflowScheduler
 
 logger = logging.getLogger(__name__)

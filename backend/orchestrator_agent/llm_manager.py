@@ -7,14 +7,12 @@ constraint-aware routing, and provider health tracking.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
-from collections import defaultdict
 import asyncio
 import logging
 import time
 
 from orchestrator_agent.llm_providers import (
-    BaseLLMProvider, ProviderConfig, ProviderType, ModelInfo,
-    Message, LLMResponse, LLMChunk, TokenUsage, create_provider,
+    BaseLLMProvider, ProviderConfig, ProviderType, Message, LLMResponse, LLMChunk, TokenUsage, create_provider,
     estimate_cost,
 )
 
