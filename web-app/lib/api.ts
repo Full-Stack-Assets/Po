@@ -1,5 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+const BASE_URL = "";
 
 // ---------- Request types ----------
 
@@ -185,6 +184,82 @@ export interface SchedulesResponse {
   schedules: any[];
 }
 
+export interface AnalyticsDashboard {
+  total_runs: number;
+  total_cost_usd: number;
+  total_tokens: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  active_providers: number;
+  pending_approvals: number;
+  cost_trend: Array<{timestamp: string; value: number; label?: string}>;
+  runs_trend: Array<{timestamp: string; value: number; label?: string}>;
+  cost_by_provider: Array<{provider: string; model: string; cost_usd: number; token_count: number; run_count: number}>;
+  cost_by_intent: Array<{provider: string; model: string; cost_usd: number; token_count: number; run_count: number}>;
+  provider_metrics: Array<{provider: string; total_requests: number; success_count: number; failure_count: number; avg_latency_ms: number; total_cost_usd: number; circuit_open: boolean}>;
+  top_intents: Array<[string, number]>;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  metadata: Record<string, any>;
+}
+
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    timestamp: string;
+    metadata: Record<string, any>;
+  }>;
+  metadata: Record<string, any>;
+}
+
+export interface ChatResponse {
+  user_message: { id: string; role: string; content: string; timestamp: string };
+  assistant_message: {
+    id: string;
+    role: string;
+    content: string;
+    timestamp: string;
+    metadata: Record<string, any>;
+  };
+  result: any;
+}
+
+export interface SystemConfigResponse {
+  providers: Array<{
+    provider: string;
+    enabled: boolean;
+    api_key_set: boolean;
+    default_model: string;
+    models_available: string[];
+    health: Record<string, any>;
+  }>;
+  constraints: Array<{
+    name: string;
+    current_used: number;
+    max_value: number;
+    unit: string;
+  }>;
+  trust: {
+    auto_approve: boolean;
+    live_signals: boolean;
+    fail_on_unverified: boolean;
+    approval_ttl_seconds: number;
+    validation_threshold: string;
+  };
+  tools: Array<{ name: string; description: string }>;
+  environment: string;
+}
+
 export interface ApiError {
   error: string;
   status: number;
@@ -257,112 +332,184 @@ class ApiClient {
     return this.request<T>("POST", path, body);
   }
 
+  private put<T>(path: string, body?: unknown) {
+    return this.request<T>("PUT", path, body);
+  }
+
   private del<T>(path: string) {
     return this.request<T>("DELETE", path);
   }
 
   // Orchestration
   orchestrate(body: OrchestrateRequest) {
-    return this.post<OrchestrationResult>("/v2/orchestrate", body);
+    return this.post<OrchestrationResult>("/api/v2/orchestrate", body);
   }
 
   batch(body: BatchRequest) {
-    return this.post<BatchResponse>("/v2/batch", body);
+    return this.post<BatchResponse>("/api/v2/batch", body);
   }
 
   // Approvals
   getApprovals() {
-    return this.get<ApprovalsResponse>("/v2/approvals");
+    return this.get<ApprovalsResponse>("/api/v2/approvals");
   }
 
   resolveApproval(id: string, body: ApprovalDecision) {
-    return this.post<OrchestrationResult>(`/v2/approvals/${id}`, body);
+    return this.post<OrchestrationResult>(`/api/v2/approvals/${id}`, body);
   }
 
   // Workflows
   planWorkflow(body: WorkflowPlanRequest) {
-    return this.post<WorkflowPlanResponse>("/v2/workflows/plan", body);
+    return this.post<WorkflowPlanResponse>("/api/v2/workflows/plan", body);
   }
 
   runWorkflow(body: WorkflowRunRequest) {
-    return this.post<WorkflowResult>("/v2/workflows", body);
+    return this.post<WorkflowResult>("/api/v2/workflows", body);
   }
 
   resumeWorkflow(threadId: string, body: WorkflowResumeRequest = {}) {
     return this.post<WorkflowResult>(
-      `/v2/workflows/${threadId}/resume`,
+      `/api/v2/workflows/${threadId}/resume`,
       body,
     );
   }
 
   getWorkflow(threadId: string) {
-    return this.get<WorkflowState>(`/v2/workflows/${threadId}`);
+    return this.get<WorkflowState>(`/api/v2/workflows/${threadId}`);
   }
 
   // Runs & Stats
   getRuns(limit?: number) {
     const q = limit !== undefined ? `?limit=${limit}` : "";
-    return this.get<RunsResponse>(`/v2/runs${q}`);
+    return this.get<RunsResponse>(`/api/v2/runs${q}`);
   }
 
   getStats() {
-    return this.get<StatsResponse>("/v2/stats");
+    return this.get<StatsResponse>("/api/v2/stats");
   }
 
   // System
   getStatus() {
-    return this.get<StatusResponse>("/v2/status");
+    return this.get<StatusResponse>("/api/v2/status");
   }
 
   getHealth() {
-    return this.get<HealthResponse>("/v2/health");
+    return this.get<HealthResponse>("/api/v2/health");
   }
 
   getModels() {
-    return this.get<any[]>("/v2/models");
+    return this.get<any[]>("/api/v2/models");
   }
 
   // Tools
   getTools() {
-    return this.get<ToolsResponse>("/v2/tools");
+    return this.get<ToolsResponse>("/api/v2/tools");
   }
 
   executeTool(body: ToolExecuteRequest) {
-    return this.post<ToolResult>("/v2/tools/execute", body);
+    return this.post<ToolResult>("/api/v2/tools/execute", body);
   }
 
   // Schedules
   getSchedules() {
-    return this.get<SchedulesResponse>("/v2/schedules");
+    return this.get<SchedulesResponse>("/api/v2/schedules");
   }
 
   createSchedule(body: ScheduleCreateRequest) {
-    return this.post<any>("/v2/schedules", body);
+    return this.post<any>("/api/v2/schedules", body);
   }
 
   runSchedule(id: string) {
-    return this.post<any>(`/v2/schedules/${id}/run`);
+    return this.post<any>(`/api/v2/schedules/${id}/run`);
   }
 
   pauseSchedule(id: string) {
-    return this.post<any>(`/v2/schedules/${id}/pause`);
+    return this.post<any>(`/api/v2/schedules/${id}/pause`);
   }
 
   resumeSchedule(id: string) {
-    return this.post<any>(`/v2/schedules/${id}/resume`);
+    return this.post<any>(`/api/v2/schedules/${id}/resume`);
   }
 
   deleteSchedule(id: string) {
-    return this.del<any>(`/v2/schedules/${id}`);
+    return this.del<any>(`/api/v2/schedules/${id}`);
+  }
+
+  // Analytics
+  getAnalyticsDashboard(periodHours = 24) {
+    return this.get<AnalyticsDashboard>(`/api/v2/analytics/dashboard?period_hours=${periodHours}`);
   }
 
   // Digest
   getDigest(periodHours?: number) {
     const q = periodHours !== undefined ? `?period_hours=${periodHours}` : "";
-    return this.get<any>(`/v2/digest${q}`);
+    return this.get<any>(`/api/v2/digest${q}`);
+  }
+
+  // Conversations
+  createConversation(title?: string) {
+    return this.post<{ id: string; title: string; created_at: string }>(
+      "/api/v2/conversations",
+      title ? { title } : {},
+    );
+  }
+
+  listConversations(limit = 20, offset = 0) {
+    return this.get<{ conversations: ConversationSummary[] }>(
+      `/api/v2/conversations?limit=${limit}&offset=${offset}`,
+    );
+  }
+
+  getConversation(id: string) {
+    return this.get<ConversationDetail>(`/api/v2/conversations/${id}`);
+  }
+
+  sendMessage(id: string, content: string, validate?: boolean) {
+    return this.post<ChatResponse>(`/api/v2/conversations/${id}/messages`, {
+      content,
+      validate,
+    });
+  }
+
+  deleteConversation(id: string) {
+    return this.del<any>(`/api/v2/conversations/${id}`);
+  }
+
+  // Config
+  getConfig() {
+    return this.get<SystemConfigResponse>("/api/v2/config");
+  }
+
+  updateConstraints(body: { max_tokens?: number; max_cost?: number }) {
+    return this.put<any>("/api/v2/config/constraints", body);
+  }
+
+  updateTrust(body: {
+    auto_approve?: boolean;
+    live_signals?: boolean;
+    fail_on_unverified?: boolean;
+  }) {
+    return this.put<any>("/api/v2/config/trust", body);
+  }
+
+  testProvider(provider: string) {
+    return this.post<{
+      success: boolean;
+      latency_ms: number;
+      model: string;
+      error?: string;
+    }>(`/api/v2/config/providers/${provider}/test`);
+  }
+
+  resetProviderCircuit(provider: string) {
+    return this.post<any>(`/api/v2/config/providers/${provider}/reset`);
+  }
+
+  resetBudgets() {
+    return this.post<any>("/api/v2/config/budgets/reset");
   }
 }
 
 export { isApiError, ApiClient };
 export type { ApiResult };
-export const api = new ApiClient(BASE_URL, API_KEY);
+export const api = new ApiClient(BASE_URL);
