@@ -167,7 +167,7 @@ print(result.score.value, result.details["sources"])
 from orchestrator_agent import VerificationLayer
 layer = VerificationLayer(fail_on_unverified=True).register_defaults()
 checks = await layer.verify_actions([
-    {"type": "deploy_health", "url": "https://my-landing.vercel.app",
+    {"type": "deploy_health", "url": "https://landing.example.com",
      "expect_substring": "Get started"},
     {"type": "email_deliverability", "domain": "mycompany.com"},
     {"type": "stripe_webhook", "payload": raw_body,

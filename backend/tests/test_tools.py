@@ -210,7 +210,7 @@ async def test_landing_page_with_deploy():
     tool = LandingPageTool(llm=FakeLLM(), deployer=fake_deployer)
     result = await tool.execute({
         "product": "AI SaaS",
-        "deploy_url": "https://my-site.vercel.app",
+        "deploy_url": "https://my-site.example.com",
     })
     assert result.success
     assert result.data.get("deployed")
