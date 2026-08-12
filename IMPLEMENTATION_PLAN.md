@@ -25,7 +25,7 @@ Plus: public reliability dashboard, full code/data portability, transparent flat
 - **Models (routed):** Claude Opus for planning/reasoning; Sonnet for content; Haiku for classification/verification
 - **Data:** PostgreSQL (Supabase or self-hosted) + Drizzle ORM / SQLAlchemy, pgvector for memory
 - **Billing:** Stripe
-- **Tools:** Resend (email), Vercel/Render (deploy), Browserbase (cloud browser), Google/Meta Ads (budget-capped), GitHub
+- **Tools:** Resend (email), Render (deploy), Browserbase (cloud browser), Google/Meta Ads (budget-capped), GitHub
 - **Task Queue:** Celery + Redis for background verification, reporting, and scheduling
 
 ## 3. Repo Structure (target)
