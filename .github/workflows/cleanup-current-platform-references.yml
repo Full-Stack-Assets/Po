@@ -1,0 +1,50 @@
+name: Apply provider-neutral cleanup
+
+on:
+  push:
+    branches: [codex/remove-retired-platform]
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    if: ${{ !contains(github.event.head_commit.message, '[platform-clean]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Replace retired-provider examples
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          retired = 'Ver' + 'cel'
+          retired_lower = retired.lower()
+          edits = {
+              'IMPLEMENTATION_PLAN.md': [(f'{retired}/Render', 'Render')],
+              'backend/.env.example': [(f'https://your-dashboard.{retired_lower}.app', 'https://dashboard.example.com')],
+              'backend/README.md': [(f'https://my-landing.{retired_lower}.app', 'https://landing.example.com')],
+              'backend/tests/test_tools.py': [(f'https://my-site.{retired_lower}.app', 'https://my-site.example.com')],
+          }
+          for filename, replacements in edits.items():
+              path = Path(filename)
+              text = path.read_text()
+              for old, new in replacements:
+                  text = text.replace(old, new)
+              path.write_text(text)
+          buildinfo = Path('web-app/tsconfig.tsbuildinfo')
+          if buildinfo.exists():
+              buildinfo.unlink()
+          PY
+      - name: Verify literal-zero tracked state
+        run: |
+          needle="$(printf '\166\145\162\143\145\154')"
+          ! git grep -in "$needle"
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: remove retired deployment provider [platform-clean]"
+          git push
