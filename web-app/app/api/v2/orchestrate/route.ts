@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://full-stack-assets.github.io/Po/",
+        "HTTP-Referer": "https://fullstackassets.com/Po/",
         "X-Title": "Po AI Operator",
       },
       body: JSON.stringify({
