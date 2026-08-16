@@ -9,6 +9,6 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: PO_CORS_ORIGINS
-        value: https://full-stack-assets.github.io
+        value: https://fullstackassets.com
       - key: PYTHON_VERSION
         value: "3.12"
